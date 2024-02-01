@@ -130,9 +130,11 @@ This pipeline can run
 
 ## Contributing
 
-Main author: Marcos Romero Lamas
-Contributors: Ramon Angel Ruiz Fernandez
-Maintainer: Ramon Angel Ruiz Fernandez
+Main author: Marcos Romero Lamas. <br>
+
+Contributors: Ramon Angel Ruiz Fernandez. <br>
+
+Maintainer: Ramon Angel Ruiz Fernandez. <br>
 
 ## Getting help
 
