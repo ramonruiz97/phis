@@ -130,9 +130,10 @@ This pipeline can run
 
 ## Contributing
 
-Contributions are very welcome. Information on contributing is available in the
-non existent CONTRIBUTING.md file
+Main author: Marcos Romero Lamas
+Contributors: Ramon Angel Ruiz Fernandez
+Maintainer: Ramon Angel Ruiz Fernandez
 
 ## Getting help
 
-Since this is a very alpha version of the repository, and it is not very well documented I guess the best you can do is ask directly to me by mail [mromerol@cern.ch](mailto:mromerol@cern.ch).
+Since this is a very alpha version of the repository, and it is not very well documented I guess the best you can do is ask directly to me by mail [mromerol@cern.ch](mailto:mromerol@cern.ch)[rruizfer@cern.ch](mailto:rruizfer@cern.ch) .
