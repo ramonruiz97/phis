@@ -1,0 +1,255 @@
+{
+  lSlon:
+  {
+    name: lSlon
+    value: 1
+    free: false
+    init: 1
+    latex: \lambda_S/\lambda_0
+    blind: false
+    blindengine: python
+    blindscale: 1.0
+  }
+  lPlon:
+  {
+    name: lPlon
+    value: 1
+    free: false
+    init: 1
+    latex: \lambda_0
+    blind: false
+    blindengine: python
+    blindscale: 1.0
+  }
+  lPpar:
+  {
+    name: lPpar
+    value: 1
+    free: false
+    init: 1
+    latex: \lambda_{\parallel}/\lambda_0
+    blind: false
+    blindengine: python
+    blindscale: 1.0
+  }
+  lPper:
+  {
+    name: lPper
+    value: 1
+    free: false
+    init: 1
+    latex: \lambda_{\perp}/\lambda_0
+    blind: false
+    blindengine: python
+    blindscale: 1.0
+  }
+  pSlon:
+  {
+    name: pSlon
+    value: 0
+    free: false
+    init: 0
+    latex: \phi_S - \phi_0
+    blind: false
+    blindengine: python
+    blindscale: 1.0
+  }
+  pPlon:
+  {
+    name: pPlon
+    value: -0.03
+    free: false
+    init: -0.03
+    latex: \phi_0
+    blind: false
+    blindengine: python
+    blindscale: 1.0
+  }
+  pPpar:
+  {
+    name: pPpar
+    value: 0
+    free: false
+    init: 0
+    latex: \phi_{\parallel} - \phi_0
+    blind: false
+    blindengine: python
+    blindscale: 1.0
+  }
+  pPper:
+  {
+    name: pPper
+    value: 0
+    free: false
+    init: 0
+    latex: \phi_{\perp} - \phi_0
+    blind: false
+    blindengine: python
+    blindscale: 1.0
+  }
+  DGd:
+  {
+    name: DGd
+    value: 0
+    free: false
+    init: 0
+    latex: \Delta \Gamma_d
+    blind: false
+    blindengine: python
+    blindscale: 1.0
+  }
+  DGsd:
+  {
+    name: DGsd
+    value: 0.00351
+    free: false
+    init: 0.00351
+    latex: \Gamma_s - \Gamma_d
+    blind: false
+    blindengine: python
+    blindscale: 1.0
+  }
+  DGs:
+  {
+    name: DGs
+    value: 0.08543
+    free: false
+    init: 0.08543
+    latex: \Delta\Gamma_s
+    blind: false
+    blindengine: python
+    blindscale: 1.0
+  }
+  Gd:
+  {
+    name: Gd
+    value: 0.65789
+    free: false
+    init: 0.65789
+    latex: \Gamma_d
+    blind: false
+    blindengine: python
+    blindscale: 1.0
+  }
+  DM:
+  {
+    name: DM
+    value: 17.8
+    free: false
+    init: 17.8
+    latex: \Delta m
+    blind: false
+    blindengine: python
+    blindscale: 1.0
+  }
+  fPlon:
+  {
+    name: fPlon
+    value: 0.5242
+    free: false
+    init: 0.5242
+    latex: f_0
+    blind: false
+    blindengine: python
+    blindscale: 1.0
+  }
+  fPper:
+  {
+    name: fPper
+    value: 0.25
+    free: false
+    init: 0.25
+    latex: f_{\perp}
+    blind: false
+    blindengine: python
+    blindscale: 1.0
+  }
+  dPpar:
+  {
+    name: dPpar
+    value: 3.26
+    free: false
+    init: 3.26
+    latex: \delta_{\parallel} - \delta_0
+    blind: false
+    blindengine: python
+    blindscale: 1.0
+  }
+  dPper:
+  {
+    name: dPper
+    value: 3.08
+    free: false
+    init: 3.08
+    latex: \delta_{\perp} - \delta_0
+    blind: false
+    blindengine: python
+    blindscale: 1.0
+  }
+  fSlon1:
+  {
+    name: fSlon1
+    value: 0.43317918
+    free: false
+    init: 0.43317918
+    latex: f_S^1
+    blind: false
+    blindengine: python
+    blindscale: 1.0
+  }
+  fSlon2:
+  {
+    name: fSlon2
+    value: 0.04151679
+    free: false
+    init: 0.04151679
+    latex: f_S^2
+    blind: false
+    blindengine: python
+    blindscale: 1.0
+  }
+  fSlon3:
+  {
+    name: fSlon3
+    value: 0.00483186
+    free: false
+    init: 0.00483186
+    latex: f_S^3
+    blind: false
+    blindengine: python
+    blindscale: 1.0
+  }
+  fSlon4:
+  {
+    name: fSlon4
+    value: 0.00683241
+    free: false
+    init: 0.00683241
+    latex: f_S^4
+    blind: false
+    blindengine: python
+    blindscale: 1.0
+  }
+  fSlon5:
+  {
+    name: fSlon5
+    value: 0.03387282
+    free: false
+    init: 0.03387282
+    latex: f_S^5
+    blind: false
+    blindengine: python
+    blindscale: 1.0
+  }
+  fSlon6:
+  {
+    name: fSlon6
+    value: 0.12201726
+    free: false
+    init: 0.12201726
+    latex: f_S^6
+    blind: false
+    blindengine: python
+    blindscale: 1.0
+  }
+}

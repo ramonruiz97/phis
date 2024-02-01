@@ -1,0 +1,422 @@
+
+
+# Physics paramters {{{
+#    Cook tables with physics paramters
+
+# ruleorder: physics_params_tabular_1on1 > physics_params_tabular_yearly
+# ruleorder: physics_params_tabular_magnet > physics_params_tabular_1on1
+# ruleorder: physics_params_tabular_yearly > physics_params_tabular_1on1
+#
+
+# Compare any two different parameter sets {{{
+
+# rule physics_params_tabular_1on1:
+#   wildcard_constraints:
+#     timeacc = 'simul.*'
+#   resources:
+#     mem_mb=1048
+#   input:
+#     lambda wcs: expand('output/params/physics_params/run2/{{mode}}/{{version}}_{fit}_{angacc}_{csp}_{flavor}_{timeacc}_{timeres}_{trigger}.json',
+#                        year=config['year'], fit=config['fit'], csp=config['csp'],
+#                        angacc=config['angacc'], timeacc=config['timeacc'],
+#                        flavor=config['flavor'], timeres=config['timeres'],
+#                        trigger=config['trigger']),
+#     lambda wcs: expand('output/params/physics_params/{{year}}/{{mode}}/{{version}}_{{fit}}_{{angacc}}_{{csp}}_{{flavor}}_{{timeacc}}_{{timeres}}_{{trigger}}.json'),
+#     lambda wcs: expand("tmp/pvalues/{{mode}}/{dyear}_{{version}}_{dfit}_{dangacc}_{dcsp}_{dflavor}_{dtimeacc}_{dtimeres}_{dtrigger}__vs__{{year}}_{{version}}_{{fit}}_{{angacc}}_{{csp}}_{{flavor}}_{{timeacc}}_{{timeres}}_{{trigger}}.npy",
+#                        dyear=config['year'], dfit=config['fit'], dcsp=config['csp'],
+#                        dangacc=config['angacc'], dtimeacc=config['timeacc'],
+#                        dflavor=config['flavor'], dtimeres=config['timeres'],
+#                        dtrigger=config['trigger']),
+#   output:
+#     'output/tables/physics_params/{year}/{mode}/{version}_{fit}_{angacc}_{csp}_{flavor}_{timeacc}_{timeres}_{trigger}.tex',
+#   log:
+#     'output/log/physics_params_tabular_1on1/{year}/{mode}/{version}_{fit}_{angacc}_{csp}_{flavor}_{timeacc}_{timeres}_{trigger}.log'
+#   run:
+#     import hjson
+#     import numpy as np
+#     import os
+#     # print(input)
+#     dlls = {}
+#     dlls[1] = {}
+#     dlls[1][0] = np.load(input[-1]).tolist()[:-1]
+#
+#     with open(f'{output}'.replace('.tex','.json'), 'w') as fp:
+#       hjson.dump(dlls, fp)
+#
+#     # print(dlls)
+#     shell(f"""(time\
+#     python packandgo/physics_tables.py\
+#     --params {",".join(input[:-1])}\
+#     --output {output}\
+#     --mode {wildcards.mode}\
+#     --year {",".join([f"{config['year']}",f"{wildcards.year}"])}\
+#     --version {wildcards.version}\
+#     --timeacc {wildcards.timeacc}\
+#     --angacc {wildcards.angacc}\
+#     ) &> {log}""")
+#     os.remove( f'{output}'.replace('.tex','.json') )
+#
+#     if NOTE:
+#       notepath = f"{output}".replace('output', NOTE)
+#       shell(f"cp {output} {notepath}")
+
+# }}}
+
+
+# Trigger table {{{
+
+rule physics_params_tabular_trigger:
+  wildcard_constraints:
+    timeacc = 'simul.*'
+  resources:
+    mem_mb=1048
+  input:
+    p1 = 'output/params/physics_params/{year}/{mode}/{version}_{fit}_{angacc}_{csp}_{flavor}_{timeacc}_{timeres}_combined.json',
+    p2 = lambda wcs: expand('output/params/physics_params/{{year}}/{{mode}}/{{version}}_{{fit}}_{{angacc}}_{{csp}}_{{flavor}}_{{timeacc}}_{{timeres}}_{trigger}.json',
+                            trigger=['unbiased', 'biased']),
+    l1 = lambda wcs: expand("tmp/pvalues/{{mode}}/{{year}}_{{version}}_{{fit}}_{{angacc}}_{{csp}}_{{flavor}}_{{timeacc}}_{{timeres}}_combined__vs__{{year}}_{{version}}_{{fit}}_{{angacc}}_{{csp}}_{{flavor}}_{{timeacc}}_{{timeres}}_{trigger}.npy",
+                            trigger=['unbiased', 'biased']),
+    l2 = lambda wcs: expand("tmp/pvalues/{{mode}}/{{year}}_{{version}}_{{fit}}_{{angacc}}_{{csp}}_{{flavor}}_{{timeacc}}_{{timeres}}_{dtrigger}__vs__{{year}}_{{version}}_{{fit}}_{{angacc}}_{{csp}}_{{flavor}}_{{timeacc}}_{{timeres}}_{ptrigger}.npy",
+                            dtrigger=['unbiased', 'biased'],
+                            ptrigger=['unbiased', 'biased'])
+  output:
+    'output/tables/physics_params/{year}/{mode}/{version}@Trigger_{fit}_{angacc}_{csp}_{flavor}_{timeacc}_{timeres}.tex',
+  log:
+    'output/log/physics_params_tabular_trigger/{year}/{mode}/{version}_{fit}_{angacc}_{csp}_{flavor}_{timeacc}_{timeres}.log'
+  run:
+    import numpy as np
+    import hjson
+    import os
+    dlls = {}; n = len(input.p2); print(n)
+
+    # convert them to lists
+    a = f"{','.join(input.l1)}".split(',')
+    b = f"{','.join(input.l2)}".split(',')
+    b = [b[i::n] for i in range(n)]
+    print(a)
+    for i in range(0,n):
+      dlls[i+1] = {}
+      dlls[i+1]["0"] = np.load(a[i]).tolist()[:-1]
+      for j in range(0,i):
+        dlls[i+1][j+1] = np.load(b[i][j]).tolist()[:-1]
+    for k1,v1 in dlls.items():
+      for k2,v2 in v1.items():
+        print(k1,k2,v2)
+
+    print(dlls)
+    print(f'{output}'.replace('.tex','.json'))
+    with open(f'{output}'.replace('.tex','.json'), 'w') as fp:
+      hjson.dump(dlls, fp)
+
+    shell(f"""(time\
+    python packandgo/physics_tables.py\
+    --params {",".join( [f"{input.p1}"]+f"{','.join(input.p2)}".split(",")  )}\
+    --output {output}\
+    --mode {wildcards.mode}\
+    --year {",".join(3*[f"{wildcards.year}"])}\
+    --version {wildcards.version}\
+    --timeacc {wildcards.timeacc}\
+    --angacc {wildcards.angacc}\
+    ) &> {log}""")
+    os.remove( f'{output}'.replace('.tex','.json') )
+
+    if NOTE:
+      notepath = f"{output}".replace('output', NOTE)
+      shell(f"cp {output} {notepath}")
+
+# }}}
+
+
+# Magnet table {{{
+
+rule physics_params_tabular_magnet:
+  wildcard_constraints:
+    timeacc = 'simul.*'
+  resources:
+    mem_mb=1048
+  input:
+    p1 = 'output/params/physics_params/{year}/{mode}/{version}_{fit}_{angacc}_{csp}_{flavor}_{timeacc}_{timeres}_combined.json',
+    p2 = lambda wcs: expand('output/params/physics_params/{{year}}/{{mode}}/{{version}}@{magnet}_{{fit}}_{{angacc}}_{{csp}}_{{flavor}}_{{timeacc}}_{{timeres}}_{{trigger}}.json',
+                            magnet=['magUp', 'magDown']),
+    l1 = lambda wcs: expand("tmp/pvalues/{{mode}}/{{year}}_{{version}}_{{fit}}_{{angacc}}_{{csp}}_{{flavor}}_{{timeacc}}_{{timeres}}_combined__vs__{{year}}_{{version}}@{magnet}_{{fit}}_{{angacc}}_{{csp}}_{{flavor}}_{{timeacc}}_{{timeres}}_{{trigger}}.npy",
+                            magnet=['magUp', 'magDown']),
+    l2 = lambda wcs: expand("tmp/pvalues/{{mode}}/{{year}}_{{version}}@{dmagnet}_{{fit}}_{{angacc}}_{{csp}}_{{flavor}}_{{timeacc}}_{{timeres}}_{{trigger}}__vs__{{year}}_{{version}}@{pmagnet}_{{fit}}_{{angacc}}_{{csp}}_{{flavor}}_{{timeacc}}_{{timeres}}_{{trigger}}.npy",
+                            dmagnet=['magUp', 'magDown'],
+                            pmagnet=['magUp', 'magDown'])
+  output:
+    'output/tables/physics_params/{year}/{mode}/{version}@Magnet_{fit}_{angacc}_{csp}_{flavor}_{timeacc}_{timeres}_{trigger}.tex',
+  log:
+    'output/log/physics_params_tabular_magnet/{year}/{mode}/{version}@Magnet_{fit}_{angacc}_{csp}_{flavor}_{timeacc}_{timeres}_{trigger}.log'
+  run:
+    import numpy as np
+    import hjson
+    import os
+    dlls = {}; n = len(input.p2); print(n)
+
+    # convert them to lists
+    a = f"{','.join(input.l1)}".split(',')
+    b = f"{','.join(input.l2)}".split(',')
+    b = [b[i::n] for i in range(n)]
+    print(a)
+    for i in range(0,n):
+      dlls[i+1] = {}
+      dlls[i+1]["0"] = np.load(a[i]).tolist()[:-1]
+      for j in range(0,i):
+        dlls[i+1][j+1] = np.load(b[i][j]).tolist()[:-1]
+    for k1,v1 in dlls.items():
+      for k2,v2 in v1.items():
+        print(k1,k2,v2)
+
+    print(dlls)
+    print(f'{output}'.replace('.tex','.json'))
+    with open(f'{output}'.replace('.tex','.json'), 'w') as fp:
+      hjson.dump(dlls, fp)
+
+    shell(f"""(time\
+    python packandgo/physics_tables.py\
+    --params {",".join( [f"{input.p1}"]+f"{','.join(input.p2)}".split(",")  )}\
+    --output {output}\
+    --mode {wildcards.mode}\
+    --year {",".join(3*[f"{wildcards.year}"])}\
+    --version {wildcards.version}\
+    --timeacc {wildcards.timeacc}\
+    --angacc {wildcards.angacc}\
+    ) &> {log}""")
+    os.remove( f'{output}'.replace('.tex','.json') )
+
+    if NOTE:
+      notepath = f"{output}".replace('output', NOTE)
+      shell(f"cp {output} {notepath}")
+
+# }}}
+
+
+# Table comparing each year wrt full dataset {{{
+
+rule physics_params_tabular_yearly:
+  wildcard_constraints:
+    fit = 'yearly.*',
+    #angacc = 'yearly.*',
+  resources:
+    mem_mb=1048,
+    cores=50
+  input:
+    p1 = lambda wcs: expand('output/params/physics_params/{year}/{{mode}}/{{version}}_{fit}_{angacc}_{csp}_{flavor}_{timeacc}_{timeres}_{trigger}.json',
+                            fit=config['fit'], angacc=config['angacc'],
+                            csp=config['csp'], flavor=config['flavor'],
+                            timeacc=config['timeacc'], timeres=config['timeres'],
+                            year=config['year'], trigger=config['trigger']
+                            ),
+    p2 = lambda wcs: expand('output/params/physics_params/2015/{{mode}}/{{version}}_{{fit}}_{{angacc}}_{{csp}}_{{flavor}}_{{timeacc}}_{{timeres}}_{{trigger}}.json'),
+    p3 = lambda wcs: expand('output/params/physics_params/2016/{{mode}}/{{version}}_{{fit}}_{{angacc}}_{{csp}}_{{flavor}}_{{timeacc}}_{{timeres}}_{{trigger}}.json'),
+    p4 = lambda wcs: expand('output/params/physics_params/2017/{{mode}}/{{version}}_{{fit}}_{{angacc}}_{{csp}}_{{flavor}}_{{timeacc}}_{{timeres}}_{{trigger}}.json'),
+    p5 = lambda wcs: expand('output/params/physics_params/2018/{{mode}}/{{version}}_{{fit}}_{{angacc}}_{{csp}}_{{flavor}}_{{timeacc}}_{{timeres}}_{{trigger}}.json'),
+    l1 = lambda wcs: expand("tmp/pvalues/{{mode}}/{dyear}_{{version}}_{dfit}_{dangacc}_{dcsp}_{dflavor}_{dtimeacc}_{dtimeres}_{dtrigger}__vs__{pyear}_{{version}}_{pfit}_{pangacc}_{pcsp}_{pflavor}_{ptimeacc}_{ptimeres}_{ptrigger}.npy",
+                            pyear=config['year'], pfit=config['fit'], pangacc=config['angacc'], pcsp=config['csp'], pflavor=config['flavor'], ptimeacc=config['timeacc'], ptimeres=config['timeres'], ptrigger=config['trigger'],
+                            dyear=YEARS['run2'], dfit=f'{wcs.fit}', dangacc=f'{wcs.angacc}', dcsp=config['csp'], dflavor=config['flavor'], dtimeacc=f'{wcs.timeacc}', dtimeres=f'{wcs.timeres}', dtrigger=f'{wcs.trigger}'),
+    l2 = lambda wcs: expand("tmp/pvalues/{{mode}}/{dyear}_{{version}}_{dfit}_{dangacc}_{dcsp}_{dflavor}_{dtimeacc}_{dtimeres}_{dtrigger}__vs__{pyear}_{{version}}_{pfit}_{pangacc}_{pcsp}_{pflavor}_{ptimeacc}_{ptimeres}_{ptrigger}.npy",
+                            pyear=YEARS['run2'], pfit=f'{wcs.fit}', pangacc=f'{wcs.angacc}', pcsp=config['csp'], pflavor=config['flavor'], ptimeacc=f'{wcs.timeacc}', ptimeres=f'{wcs.timeres}', ptrigger=f'{wcs.trigger}',
+                            dyear=YEARS['run2'], dfit=f'{wcs.fit}', dangacc=f'{wcs.angacc}', dcsp=config['csp'], dflavor=config['flavor'], dtimeacc=f'{wcs.timeacc}', dtimeres=f'{wcs.timeres}', dtrigger=f'{wcs.trigger}'),
+  output:
+    'output/tables/physics_params/run2/{mode}/{version}_{fit}_{angacc}_{csp}_{flavor}_{timeacc}_{timeres}_{trigger}.tex',
+  log:
+    'output/log/pack_physics_params/run2/{mode}/{version}_{fit}_{angacc}_{csp}_{flavor}_{timeacc}_{timeres}_{trigger}.log'
+  run:
+    import numpy as np
+    import hjson
+    import os
+    dlls = {}; n = 4
+
+    # convert them to lists
+    a = f"{','.join(input.l1)}".split(',')
+    b = f"{','.join(input.l2)}".split(',')
+    b = [b[i::n] for i in range(n)]
+
+    for i in range(0,4):
+      dlls[i+1] = {}
+      dlls[i+1]["0"] = np.load(a[i]).tolist()[:-1]
+      for j in range(0,i):
+        dlls[i+1][j+1] = np.load(b[i][j]).tolist()[:-1]
+    for k1,v1 in dlls.items():
+      for k2,v2 in v1.items():
+        print(k1,k2,v2)
+
+    print(dlls)
+    print(f'{output}'.replace('.tex','.json'))
+    with open(f'{output}'.replace('.tex','.json'), 'w') as fp:
+      hjson.dump(dlls, fp)
+
+    shell(f"""(time\
+    python packandgo/physics_tables.py\
+           --params {",".join([f"{input.p1}",f"{input.p2}",f"{input.p3}",f"{input.p4}",f"{input.p5}"])}\
+           --output {output}\
+           --mode {wildcards.mode}\
+           --year run2,{",".join(YEARS[f"run2"])}\
+           --version {wildcards.version}\
+           --timeacc {wildcards.timeacc}\
+           --angacc {wildcards.angacc}\
+    ) &> {log}""")
+    os.remove( f'{output}'.replace('.tex','.json') )
+    if NOTE:
+      notepath = f"{output}".replace('output', NOTE)
+      shell(f"cp {output} {notepath}")
+
+# }}}
+
+
+# Pack pTB, sigmat or etaB table {{{
+
+rule physics_params_tabular_binned_variables:
+  resources:
+    mem_mb=1048
+  wildcard_constraints:
+    var = "(.*)(pTB|sigmat|etaB)"
+  input:
+    p1 = 'output/params/physics_params/{year}/{mode}/{version}_{fit}_{angacc}_{csp}_{flavor}_{timeacc}_{timeres}_{trigger}.json',
+    p2 = lambda wcs: expand('output/params/physics_params/{{year}}/{{mode}}/{{version}}@{{var}}{bin}_{{fit}}_{{angacc}}_{{csp}}_{{flavor}}_{{timeacc}}_{{timeres}}_{{trigger}}.json',
+                            bin=[1,2,3] if 'pTB' not in f'{wcs.var}' else [1,2,3,4]),
+    l1 = lambda wcs: expand("tmp/pvalues/{{mode}}/{{year}}_{{version}}_{{fit}}_{{angacc}}_{{csp}}_{{flavor}}_{{timeacc}}_{{timeres}}_{{trigger}}__vs__{{year}}_{{version}}@{{var}}{bin}_{{fit}}_{{angacc}}_{{csp}}_{{flavor}}_{{timeacc}}_{{timeres}}_{{trigger}}.npy",
+                            bin=[1,2,3] if 'pTB' not in f'{wcs.var}' else [1,2,3,4]),
+    l2 = lambda wcs: expand("tmp/pvalues/{{mode}}/{{year}}_{{version}}@{{var}}{dbin}_{{fit}}_{{angacc}}_{{csp}}_{{flavor}}_{{timeacc}}_{{timeres}}_{{trigger}}__vs__{{year}}_{{version}}@{{var}}{pbin}_{{fit}}_{{angacc}}_{{csp}}_{{flavor}}_{{timeacc}}_{{timeres}}_{{trigger}}.npy",
+                            pbin=[1,2,3] if 'pTB' not in f'{wcs.var}' else [1,2,3,4],
+                            dbin=[1,2,3] if 'pTB' not in f'{wcs.var}' else [1,2,3,4])
+  output:
+    'output/tables/physics_params/{year}/{mode}/{version}@{var}_{fit}_{angacc}_{csp}_{flavor}_{timeacc}_{timeres}_{trigger}.tex',
+  log:
+    'output/log/physics_params_tabular_binned_variables/{year}/{mode}/{version}@{var}_{fit}_{angacc}_{csp}_{flavor}_{timeacc}_{timeres}_{trigger}.log'
+  run:
+    import numpy as np
+    import hjson
+    import os
+    dlls = {}; n = len(input.p2); print(n)
+
+    # convert them to lists
+    a = f"{','.join(input.l1)}".split(',')
+    b = f"{','.join(input.l2)}".split(',')
+    b = [b[i::n] for i in range(n)]
+    print(a)
+    for i in range(0,n):
+      dlls[i+1] = {}
+      dlls[i+1]["0"] = np.load(a[i]).tolist()[:-1]
+      for j in range(0,i):
+        dlls[i+1][j+1] = np.load(b[i][j]).tolist()[:-1]
+    for k1,v1 in dlls.items():
+      for k2,v2 in v1.items():
+        print(k1,k2,v2)
+
+    print(dlls)
+    print(f'{output}'.replace('.tex','.json'))
+    with open(f'{output}'.replace('.tex','.json'), 'w') as fp:
+      hjson.dump(dlls, fp)
+
+    shell(f"""(time\
+    python packandgo/physics_tables.py\
+    --params {",".join( [f"{input.p1}"]+f"{','.join(input.p2)}".split(",")  )}\
+    --output {output}\
+    --mode {wildcards.mode}\
+    --year {",".join((n+1)*[f"{wildcards.year}"])}\
+    --version {wildcards.version}\
+    --timeacc {wildcards.timeacc}\
+    --angacc {wildcards.angacc}\
+    ) &> {log}""")
+    os.remove( f'{output}'.replace('.tex','.json') )
+    if NOTE:
+      notepath = f"{output}".replace('output', NOTE)
+      shell(f"cp {output} {notepath}")
+
+# }}}
+
+# }}}
+
+
+rule physics_params_plot_systematics:
+  input:
+    "output/params/physics_params/run2/{mode}/{version}_run2_run2_vgc_amsrd_simul3_amsrd_combined.json",
+    "output/tmp/splitter",
+    "output/params/physics_params/run2/Bs2JpsiPhi/v0r5@magUp_run2_run2_vgc_amsrd_simul3_amsrd_combined.json",
+    "output/params/physics_params/run2/Bs2JpsiPhi/v0r5@magDown_run2_run2_vgc_amsrd_simul3_amsrd_combined.json",
+    "output/tmp/splitter",
+    "output/params/physics_params/run2/Bs2JpsiPhi/v0r5_run2_run2_vgc_amsrd_simul3_amsrd_biased.json",
+    "output/params/physics_params/run2/Bs2JpsiPhi/v0r5_run2_run2_vgc_amsrd_simul3_amsrd_unbiased.json",
+    "output/tmp/splitter",
+    "output/params/physics_params/2015/Bs2JpsiPhi/v0r5_yearly_yearly_vgc_amsrd_simul3_amsrd_combined.json",
+    "output/params/physics_params/2016/Bs2JpsiPhi/v0r5_yearly_yearly_vgc_amsrd_simul3_amsrd_combined.json",
+    "output/params/physics_params/2017/Bs2JpsiPhi/v0r5_yearly_yearly_vgc_amsrd_simul3_amsrd_combined.json",
+    "output/params/physics_params/2018/Bs2JpsiPhi/v0r5_yearly_yearly_vgc_amsrd_simul3_amsrd_combined.json",
+    "output/tmp/splitter",
+    "output/params/physics_params/run2/Bs2JpsiPhi/v0r5_run2_run2_vgc_amsrd_simul3BuasBd_amsrd_combined.json",
+    "output/tmp/splitter",
+    "output/params/physics_params/2015/Bs2JpsiPhi/v0r5_yearly_yearly_vgc_amsrd_simul3BuasBd_amsrd_combined.json",
+    "output/params/physics_params/2016/Bs2JpsiPhi/v0r5_yearly_yearly_vgc_amsrd_simul3BuasBd_amsrd_combined.json",
+    "output/params/physics_params/2017/Bs2JpsiPhi/v0r5_yearly_yearly_vgc_amsrd_simul3BuasBd_amsrd_combined.json",
+    "output/params/physics_params/2018/Bs2JpsiPhi/v0r5_yearly_yearly_vgc_amsrd_simul3BuasBd_amsrd_combined.json",
+    "output/tmp/splitter",
+    "output/params/physics_params/run2/Bs2JpsiPhi/v0r5@sigmat1_run2_run2_vgc_amsrd_simul3_amsrd_combined.json",
+    "output/params/physics_params/run2/Bs2JpsiPhi/v0r5@sigmat2_run2_run2_vgc_amsrd_simul3_amsrd_combined.json",
+    "output/params/physics_params/run2/Bs2JpsiPhi/v0r5@sigmat3_run2_run2_vgc_amsrd_simul3_amsrd_combined.json",
+    "output/tmp/splitter",
+    "output/params/physics_params/run2/Bs2JpsiPhi/v0r5@etaB1_run2_run2_vgc_amsrd_simul3_amsrd_combined.json",
+    "output/params/physics_params/run2/Bs2JpsiPhi/v0r5@etaB2_run2_run2_vgc_amsrd_simul3_amsrd_combined.json",
+    "output/params/physics_params/run2/Bs2JpsiPhi/v0r5@etaB3_run2_run2_vgc_amsrd_simul3_amsrd_combined.json",
+    "output/tmp/splitter",
+    "output/params/physics_params/run2/Bs2JpsiPhi/v0r5@pTB1_run2_run2_vgc_amsrd_simul3_amsrd_combined.json",
+    "output/params/physics_params/run2/Bs2JpsiPhi/v0r5@pTB2_run2_run2_vgc_amsrd_simul3_amsrd_combined.json",
+    "output/params/physics_params/run2/Bs2JpsiPhi/v0r5@pTB3_run2_run2_vgc_amsrd_simul3_amsrd_combined.json",
+    "output/params/physics_params/run2/Bs2JpsiPhi/v0r5@pTB4_run2_run2_vgc_amsrd_simul3_amsrd_combined.json",
+    "output/tmp/splitter",
+    "output/params/physics_params/2015/Bs2JpsiPhi/v0r5@pTB1_yearly_yearly_vgc_amsrd_simul3_amsrd_combined.json",
+    "output/params/physics_params/2016/Bs2JpsiPhi/v0r5@pTB1_yearly_yearly_vgc_amsrd_simul3_amsrd_combined.json",
+    "output/params/physics_params/2017/Bs2JpsiPhi/v0r5@pTB1_yearly_yearly_vgc_amsrd_simul3_amsrd_combined.json",
+    "output/params/physics_params/2018/Bs2JpsiPhi/v0r5@pTB1_yearly_yearly_vgc_amsrd_simul3_amsrd_combined.json",
+    "output/tmp/splitter",
+    "output/params/physics_params/2015/Bs2JpsiPhi/v0r5@pTB2_yearly_yearly_vgc_amsrd_simul3_amsrd_combined.json",
+    "output/params/physics_params/2016/Bs2JpsiPhi/v0r5@pTB2_yearly_yearly_vgc_amsrd_simul3_amsrd_combined.json",
+    "output/params/physics_params/2017/Bs2JpsiPhi/v0r5@pTB2_yearly_yearly_vgc_amsrd_simul3_amsrd_combined.json",
+    "output/params/physics_params/2018/Bs2JpsiPhi/v0r5@pTB2_yearly_yearly_vgc_amsrd_simul3_amsrd_combined.json",
+    "output/tmp/splitter",
+    "output/params/physics_params/2015/Bs2JpsiPhi/v0r5@pTB3_yearly_yearly_vgc_amsrd_simul3_amsrd_combined.json",
+    "output/params/physics_params/2016/Bs2JpsiPhi/v0r5@pTB3_yearly_yearly_vgc_amsrd_simul3_amsrd_combined.json",
+    "output/params/physics_params/2017/Bs2JpsiPhi/v0r5@pTB3_yearly_yearly_vgc_amsrd_simul3_amsrd_combined.json",
+    "output/params/physics_params/2018/Bs2JpsiPhi/v0r5@pTB3_yearly_yearly_vgc_amsrd_simul3_amsrd_combined.json",
+    "output/tmp/splitter",
+    "output/params/physics_params/2015/Bs2JpsiPhi/v0r5@pTB4_yearly_yearly_vgc_amsrd_simul3_amsrd_combined.json",
+    "output/params/physics_params/2016/Bs2JpsiPhi/v0r5@pTB4_yearly_yearly_vgc_amsrd_simul3_amsrd_combined.json",
+    "output/params/physics_params/2017/Bs2JpsiPhi/v0r5@pTB4_yearly_yearly_vgc_amsrd_simul3_amsrd_combined.json",
+    "output/params/physics_params/2018/Bs2JpsiPhi/v0r5@pTB4_yearly_yearly_vgc_amsrd_simul3_amsrd_combined.json",
+    "output/tmp/splitter",
+    "output/params/physics_params/run2/Bs2JpsiPhi/v0r5@pTB1_run2_run2_vgc_amsrd_simul3_amsrd_unbiased.json",
+    "output/params/physics_params/run2/Bs2JpsiPhi/v0r5@pTB2_run2_run2_vgc_amsrd_simul3_amsrd_unbiased.json",
+    "output/params/physics_params/run2/Bs2JpsiPhi/v0r5@pTB3_run2_run2_vgc_amsrd_simul3_amsrd_unbiased.json",
+    "output/params/physics_params/run2/Bs2JpsiPhi/v0r5@pTB4_run2_run2_vgc_amsrd_simul3_amsrd_unbiased.json",
+    "output/tmp/splitter",
+    "output/params/physics_params/run2/Bs2JpsiPhi/v0r5@pTB1_run2_run2_vgc_amsrd_simul3_amsrd_biased.json",
+    "output/params/physics_params/run2/Bs2JpsiPhi/v0r5@pTB2_run2_run2_vgc_amsrd_simul3_amsrd_biased.json",
+    "output/params/physics_params/run2/Bs2JpsiPhi/v0r5@pTB3_run2_run2_vgc_amsrd_simul3_amsrd_biased.json",
+    "output/params/physics_params/run2/Bs2JpsiPhi/v0r5@pTB4_run2_run2_vgc_amsrd_simul3_amsrd_biased.json",
+    "output/tmp/splitter",
+    "output/params/physics_params/run2/Bs2JpsiPhi/v0r5@pTB1_run2_run2_vgc_amsrd_simul3LT_amsrd_combined.json",
+    "output/params/physics_params/run2/Bs2JpsiPhi/v0r5@pTB2_run2_run2_vgc_amsrd_simul3LT_amsrd_combined.json",
+    "output/params/physics_params/run2/Bs2JpsiPhi/v0r5@pTB3_run2_run2_vgc_amsrd_simul3LT_amsrd_combined.json",
+    "output/params/physics_params/run2/Bs2JpsiPhi/v0r5@pTB4_run2_run2_vgc_amsrd_simul3LT_amsrd_combined.json",
+    "output/tmp/splitter",
+    "output/params/physics_params/run2/Bs2JpsiPhi/v0r5@pTB1_run2_run2_vgc_amsrd_simul3UT_amsrd_combined.json",
+    "output/params/physics_params/run2/Bs2JpsiPhi/v0r5@pTB2_run2_run2_vgc_amsrd_simul3UT_amsrd_combined.json",
+    "output/params/physics_params/run2/Bs2JpsiPhi/v0r5@pTB3_run2_run2_vgc_amsrd_simul3UT_amsrd_combined.json",
+    "output/params/physics_params/run2/Bs2JpsiPhi/v0r5@pTB4_run2_run2_vgc_amsrd_simul3UT_amsrd_combined.json",
+  output:
+    "output/figures/physics_params/all/{mode}/{version}_{param}.pdf"
+  log:
+    "output/log/physics_params_plot_systematics/all/{mode}/{version}_{param}.log"
+  run:
+    shell(f"""(time\
+    python packandgo/plot_all_syst.py\
+    --params {",".join(input)}\
+    --param {wildcards.param}\
+    --figure {output}\
+    --mode {wildcards.mode}\
+    --version {wildcards.version}\
+    ) #&> {log}""")
+
+
+
+# vim:foldmethod=marker

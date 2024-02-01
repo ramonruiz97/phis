@@ -1,0 +1,293 @@
+# SAMPLES
+#
+#
+
+
+# Syncronize tuples from EOS {{{
+#    This rule downloads all files corresponding to a given VERSION from EOS
+#    to SAMPLES_PATH folder. It requires you to make a kinit on your system,
+#    and then it worka automatically.
+
+if config['allow_downloads'] and not config['run_selection']:
+  rule samples_download_tuple:
+    wildcard_constraints:
+      weight = "(selected|ready)"
+    threads: 2
+    resources:
+      mem_mb=6144
+    params:
+      settings.user['eos']
+    output:
+      SAMPLES+'/{year}/{mode}/{version,[A-Za-z0-9@]+}_{weight}.root'
+    log:
+      'output/log/samples_download_tuple/{year}/{mode}/{version}_{weight}.log'
+    run:
+      if 'GUN' in f"{wildcards.mode}":
+        folder = 'tuples_standalone'
+      else:
+        folder = 'tuples'
+      shell(f"""(time\
+      python analysis/samples/download_tuples.py\
+      --year {wildcards.year}\
+      --mode {wildcards.mode}\
+      --version {wildcards.version}\
+      --weight {wildcards.weight}\
+      --tree DecayTree\
+      --output {output}\
+      --eos {params}/{folder}\
+      ) &> {log}""")
+
+
+rule samples_upload_tuple:
+  wildcard_constraints:
+    # surname = "(lbWeight|tagged)"
+    weight = "(selected|sWeight|lbWeight|tagged)"
+  threads: 2
+  resources:
+    mem_mb=6144
+  params:
+    os.path.join(settings.user['eos'], 'tuples')
+  input:
+    lambda wcs: tuples(wcs, year=f'{wcs.year}', weight=f'{wcs.weight}')
+  output:
+    SAMPLES+'/{year}/{mode}/{version,[A-Za-z0-9@]+}_{weight,[A-Za-z0-9]+}.eos'
+  run:
+    m = f'{wildcards.mode}'
+    y = f'{wildcards.year}'
+    v = f'{wildcards.version}'
+    local = f'{input}'
+    # phi-scq tuple handler is smarter than the user, and it knows which is the
+    # actual last tuple the user wants if she/he asks for some tuple that do
+    # not exist
+    # w = f'{wildcards.weight}'
+    w = os.path.basename(local).replace('.root', '')
+    w = w.split('_')[-1]  # remove version
+    # jan22, we decided the following naming convention for eos tuples
+    eos = os.path.join(f"{params}", v, m, y, f"{v}_{m}_{y}_{w}.root")
+    # eos = f'{input}'.replace(SAMPLES, f"{params}")
+    # if s == 'lbWeight':
+    #     eos.replace('_lbWeight.root', '_ready.root')
+    # elif m != 'Bs2JpsiPhi' and s == 'tagged':
+    #     eos.replace('_tagged.root', '_ready.root')
+    # shell(f"{}")
+    shell(f"(time xrdcp -f {local} root://eoslhcb.cern.ch/{eos}) &> {output}")
+
+# }}}
+
+
+# Create stat table for sample {{{
+#    Creates tables spliting some given sample in biased and unbiased categories
+#    just showing how muchs statistics we have per year and trigger category.
+
+rule samples_stat_tuple:
+  threads: 1
+  resources:
+    mem_mb=6144
+  input:
+    lambda wcs: tuples(wcs, year=f'{wcs.year}')
+  output:
+    'output/tables/samples_stat_tuple/{year}/{mode}/{version}_{kind}.tex'
+  log:
+    'output/log/samples_stat_tuple/{year}/{mode}/{version}_{kind}.log'
+  run:
+    shell(f"""(time\
+    python analysis/samples/tuple_stat.py\
+    --year {wildcards.year}\
+    --sample {','.join(input)}\
+    --output {output}\
+    --kind {wildcards.kind}\
+    ) &> {log}""")
+
+# }}}
+
+
+# Reduce branches in tuples {{{
+#    Reduces the amount of branches in the original ntuples. This rule builds
+#    the ntuples that will actually be used for phis-scq analysis package.
+
+rule samples_chop_tuple:
+  threads: 2
+  resources:
+    mem_mb=8000
+  input:
+    lambda wcs: tuples(wcs, version=f'{wcs.version}'.split('@')[0].split('~')[0].split('bdt')[0], year=f'{wcs.year}', weight=f'ready')
+  output:
+    SAMPLES+'/{year}/{mode}/{version,[A-Za-z0-9@~]+}_chopped.root'
+  log:
+    'output/log/samples_chop_tuple/{year}/{mode}/{version}_chopped.log'
+  run:
+    shell(f"""(time\
+    python analysis/samples/chop_tuples.py\
+    --year {wildcards.year}\
+    --mode {wildcards.mode}\
+    --version {wildcards.version}\
+    --weight chopped\
+    --tree DecayTree\
+    --output {output}\
+    --input {input}\
+    ) &> {log}""")
+
+
+rule samples_reduce_tuple:
+  threads: 2
+  wildcard_constraints:
+    mode = "((MC_|GUN_)?(Bs2JpsiPhi|Bd2JpsiKstar|Bu2JpsiKplus|Bs2JpsiKK)(_dG0|_Swave)?)"
+  resources:
+    mem_mb=2048
+  input:
+    sample = lambda wcs: tuples(wcs, weight='kinWeight')
+  output:
+    sample = SAMPLES+'/{year}/{mode}/{version,[A-Za-z0-9@~]+}.root'
+  log:
+    'output/log/samples_reduce_tuple/{year}/{mode}/{version}.log'
+  run:
+    shell(f"""(time\
+    python analysis/samples/reduce_tuples.py\
+    --input-file {input.sample}\
+    --output-file {output.sample}\
+    --input-tree DecayTree\
+    --output-tree DecayTree\
+    ) &> {log}""")
+
+# }}}
+
+
+# samples plot {{{
+#   plot of differents branches of the ntuples. this rule get the plots for
+#   the years with no corrections, sw and kinematic corrections (MC vs data)
+
+rule samples_plot:
+  threads: 128
+  resources:
+    mem_mb=1024
+  wildcard_constraints:
+    mode = "(TOY_|MC_)?(Bs2JpsiPhi|Bd2JpsiKstar)(_dG0)?",
+    #branch = "(pTB|pB|pTHp|pHp|pTHm|pHm|etaB|mHH|logIPchi2B|BDTFchi2|logMINkPNNk|BVXchi2|pTX|KmaxTRchi2|MUmaxTRchi2|logJpsiVXchi2|logMINmuPNNmu)",
+  input:
+    tuple = lambda wcs: tuples(wcs, mode='cdata', year=f'{wcs.year}'),
+    control = lambda wcs: tuples(wcs, year=f'{wcs.year}')
+  output:
+    'output/figures/plot_samples/{year}/{mode}/{version}_{branch}.pdf',
+    'output/figures/plot_samples/{year}/{mode}/{version}_{branch}_sw.pdf',
+    'output/figures/plot_samples/{year}/{mode}/{version}_{branch}_rw.pdf'
+  log:
+    'output/log/plot_samples/{year}/{mode}/{version}_{branch}.log',
+  run:
+    shell(f"""(time\
+    python analysis/samples/plot.py\
+    --tuple {",".join(input.tuple)}\
+    --control {",".join(input.control)}\
+    --year {",".join(YEARS['run2'])}\
+    --version {wildcards.version}\
+    --mode {wildcards.mode}\
+    --branch {wildcards.branch}\
+    --output {",".join(output)}\
+    ) &> {log}""")
+    send_mail(f"Samples plot :: {wildcards}", f"{log}", f"{output}".split(' '))
+
+rule samples_plot_wrt_v0r0:
+  threads: 128
+  resources:
+    mem_mb=1024
+  wildcard_constraints:
+    mode = "(TOY_|MC_)?(Bs2JpsiPhi|Bd2JpsiKstar)(_dG0)?",
+    #branch = "(time|cosK|cosL|hphi|pTB|pB|pTHp|pHp|pTHm|pHm|etaB|mHH|logIPchi2B|BDTFchi2|logMINkPNNk|BVXchi2|pTX|KmaxTRchi2|MUmaxTRchi2|logJpsiVXchi2|logMINmuPNNmu)",
+    year = '\d{4}'
+  input:
+    tuple = lambda wcs: [tuples(wcs, version='v0r5')],
+    control = lambda wcs: [tuples(wcs, version='v0r0')]
+  output:
+    'output/figures/oldcomparison/{year}/{mode}/{version}_{branch}.pdf',
+    'output/figures/oldcomparison/{year}/{mode}/{version}_{branch}_sw.pdf',
+    'output/figures/oldcomparison/{year}/{mode}/{version}_{branch}_rw.pdf'
+  log:
+    'output/log/plot_samples_yearly_v0r5_vs_v0r0/{year}/{mode}/{version}_{branch}.log',
+  run:
+    shell(f"""(time\
+    python analysis/samples/plot.py\
+           --tuple {",".join(input.tuple)}\
+           --control {",".join(input.control)}\
+           --year {wildcards.year}\
+           --version {wildcards.version}\
+           --mode {wildcards.mode}\
+           --branch {wildcards.branch}\
+           --output {",".join(output)}\
+    ) &> {log}""")
+    send_mail(f"Samples old comparison plot :: {wildcards}", f"{log}", f"{output}".split(' '))
+
+# }}}
+
+
+# samples plot {{{
+#   plot of differents branches of the ntuples. this rule get the plots for
+#   the years with no corrections, sw and kinematic corrections (MC vs data)
+
+rule samples_plot_99:
+  threads: 128
+  resources:
+    mem_mb=1024
+  wildcard_constraints:
+    mode = "MC_Bs2JpsiPhi(_dG0)?",
+    branch = "(sigmat|B_LOKI_DTF_CTAU|B_LOKI_DTF_CTAUERR|B_IPCHI2_OWNPV|nTracks|nLongTracks|nSPDHits|hplus_TRACK_CHI2NDOF|hplus_ProbNNk|hplus_ProbNNpi|hplus_ProbNNp|muplus_TRACK_CHI2NDOF|muplus_ProbNNmu|muminus_TRACK_CHI2NDOF|muminus_ProbNNmu|muplus_PIDmu|muminus_PIDmu|hplus_PIDK|B_DTF_CHI2NDOF|B_FDS|B_DIRA|B_M|B_ETA|beam_shift_X|beam_shift_Y|B_pKMuMuKminus_M_1|B_B2KpPiJpsi_M_1|B_B2KmPiJpsi_M_1|hminus_TRACK_CHI2NDOF|hminus_ProbNNk|hminus_ProbNNpi|hminus_ProbNNp|X_ENDVERTEX_CHI2|docaz_muminus|docaz_muplus|docaz_hplus|docaz_hminus|muplus_ProbNNmu_corr|muminus_ProbNNmu_corr|hplus_ProbNNpi_corr|hplus_ProbNNp_corr|hplus_ProbNNk_corr|hminus_ProbNNpi_corr|hminus_ProbNNp_corr|hminus_ProbNNk_corr|max_K_TRCHI2_mva|log_min_K_PNNk_mva|max_mu_TRCHI2_mva|log_min_mu_PNNmu_mva|log_Jpsi_VX_CHI2NDOF_mva|X_PT_mva|B_VX_CHI2NDOF_mva|log_B_DTF_CHI2NDOF_mva|log_B_IPCHI2_mva)"
+  input:
+    tuple = lambda wcs: tuples(wcs, mode='cdata', year=f'{wcs.year}', weight='sWeight'),
+    control = lambda wcs: tuples(wcs, year=f'{wcs.year}', weight='sWeight')
+  output:
+    'output/figures/plot_samples_99/{year}/{mode}/{version}_{branch}.pdf',
+  log:
+    'output/log/plot_samples_99/{year}/{mode}/{version}_{branch}.log',
+  run:
+    shell(f"""(time\
+    python analysis/samples/plot_noreduced.py\
+    --tuple {",".join(input.tuple)}\
+    --control {",".join(input.control)}\
+    --year {",".join(YEARS['run2'])}\
+    --version {wildcards.version}\
+    --mode {wildcards.mode}\
+    --branch {wildcards.branch}\
+    --output {",".join(output)}\
+    ) &> {log}""")
+    send_mail(f"Samples plot :: {wildcards}", f"{log}", f"{output}".split(' '))
+
+# }}}
+
+
+# IFT plot {{{
+# Plotting some branches that will enter in the IFT calibration.
+
+rule IFT_plot:
+  threads: 128
+  resources:
+    mem_mb=1024
+  wildcard_constraints:
+    mode = "MC_(Bs2JpsiPhi|Bs2DsPi)(_dG0)?",
+    branch = "(B_IFT_InclusiveTagger_TAG|B_SSKaonLatest_TAG)(ETA|DEC)"
+  input:
+    tuple = lambda wcs: tuples(wcs, mode='cdata', year=f'{wcs.year}', weight='sWeight'),
+    control = lambda wcs: tuples(wcs, year=f'{wcs.year}', weight='sWeight')
+  output:
+    'output/figures/plot_ift/{year}/{mode}/{version}_{branch}.pdf',
+    'output/figures/plot_ift/{year}/{mode}/{version}_{branch}_sw.pdf',
+  log:
+    'output/log/plot_ift/{year}/{mode}/{version}_{branch}.log',
+  run:
+    tuple = input.tuple
+    tuple = [tuple] if isinstance(tuple,str) else tuple
+    control = input.control
+    control = [control] if isinstance(control,str) else control
+    shell(f"""(time\
+    python analysis/samples/plot_ift_check.py\
+    --tuple {",".join(tuple)}\
+    --control {",".join(control)}\
+    --year {wildcards.year}\
+    --version {wildcards.version}\
+    --mode {wildcards.mode}\
+    --branch {wildcards.branch}\
+    --output {",".join(output)}\
+    ) &> {log}""")
+    send_mail(f"IFT plot :: {wildcards}", f"{log}", f"{output}".split(' '))
+
+# }}}
+
+
+# vim: fdm=marker ft=snakemake

@@ -1,0 +1,233 @@
+# LIFETIME
+#
+#   Description:
+# 
+#        Author: Marcos Romero Lamas (mromerol@cern.ch)
+
+
+# Single lifetime {{{
+#     Two lifetime rules for single time acceptances are required. Mesons which
+#     do not oscillate (or we assume they almost don't) followe the single_Bx
+#     rule for lifetime. The Bs meson, which does oscillate needs to be 
+#     disentangled, hence it follows single_Bx_disentangle rule.
+
+rule lifetime_single_Bx:
+  threads: 6
+  resources:
+    mem_mb=4096,
+  wildcard_constraints:
+    timeacc = "single.*",
+    mode = "(Bu2JpsiKplus|Bd2JpsiKstar)"
+  input:
+    sample = lambda wcs: tuples(wcs),
+    biased = lambda wcs: expand('output/params/time_acceptance/{year}/{mode}/{version}_{{timeacc}}_biased.json',
+                                year=YEARS[f'{wcs.year}'], version=f'{wcs.version}',
+                                mode = f"MC_{wcs.mode}_dG0" if "Bs" in f"{wcs.mode}" else f"MC_{wcs.mode}"),
+    unbiased = lambda wcs: expand('output/params/time_acceptance/{year}/{mode}/{version}_{{timeacc}}_unbiased.json',
+                                  year=YEARS[f'{wcs.year}'], version=f'{wcs.version}',
+                                  mode = f"MC_{wcs.mode}_dG0" if "Bs" in f"{wcs.mode}" else f"MC_{wcs.mode}"),
+  output:
+    params = 'output/params/lifetime/{year}/{mode}/{version}_{timeacc}_{trigger}.json',
+  log:
+    'output/log/lifetime_single/{year}/{mode}/{version}_life{timeacc}_{trigger}.log'
+  run:
+    samples = input.sample
+    samples = [samples] if isinstance(samples,str) else samples
+    shell(f"""
+    (time\
+    python analysis/time_acceptance/lifetime_single.py\
+    --sample {",".join(samples)}\
+    --biased-params {",".join(input.biased)}\
+    --unbiased-params {",".join(input.unbiased)}\
+    --output-params {output.params}\
+    --year {",".join(YEARS[f'{wildcards.year}'])}\
+    --version {wildcards.version}\
+    --timeacc {wildcards.timeacc}\
+    --trigger {wildcards.trigger}\
+    ) &> {log}""")
+    send_mail(f"Lifetime Bd fit :: {wildcards}", f"{log}")
+
+
+rule lifetime_crappy_Bx:
+  threads: 6
+  resources:
+    mem_mb=4096,
+  wildcard_constraints:
+    timeacc = "crappy.*",
+    mode = "(Bu2JpsiKplus|Bd2JpsiKstar)"
+  input:
+    mc = lambda wcs: expand('/scratch46/marcos.romero/sidecar/{year}/MC_{{mode}}/{{version}}_MCforMassFit.root', year=YEARS[f'{wcs.year}']),
+    data = lambda wcs: expand('/scratch46/marcos.romero/sidecar/{year}/{{mode}}/{{version}}_MCforMassFit.root', year=YEARS[f'{wcs.year}']),
+  output:
+    params = 'output/params/lifetime/{year}/{mode}/{version}_{timeacc}_{trigger}.json',
+    figures = directory('output/params/lifetime/{year}/{mode}/{version}_{timeacc}_{trigger}')
+  log:
+    'output/log/lifetime_single/{year}/{mode}/{version}_{timeacc}_{trigger}.log'
+  run:
+    shell(f"""
+    (time\
+    python analysis/lifetime/new_shit.py\
+    --rd-sample {",".join(input.data)}\
+    --mc-sample {",".join(input.mc)}\
+    --output-params {output.params}\
+    --output-figures {output.figures}\
+    --year {",".join(YEARS[f'{wildcards.year}'])}\
+    --mode {wildcards.mode}\
+    --version {wildcards.version}\
+    --timeacc {wildcards.timeacc}\
+    --trigger {wildcards.trigger}\
+    ) &> {log}""")
+    send_mail(f"Lifetime Bd fit :: {wildcards}", f"{log}")
+
+
+rule lifetime_single_Bx_disentangle:
+  threads: 6
+  resources:
+    mem_mb=4096,
+  wildcard_constraints:
+    #timeacc = "single.*",
+    mode = "(Bs2JpsiPhi|Bs2JpsiKstar)"
+  input:
+    "output/params/physics_params/{year}/{mode}/{version}_auto_yearlyDual_vgc_amsrd_{timeacc}_amsrd_{trigger}.json"
+  output:
+    params = 'output/params/lifetime/{year}/{mode}/{version}_{timeacc}_{trigger}.json',
+  run:
+    from ipanema import Parameters
+    in_pars = Parameters.load(f"{input}")
+    out_pars = Parameters()
+    print(in_pars['Gd'], in_pars['DGsd'])
+    gamma = in_pars['Gd'] + in_pars['DGsd']
+    out_pars.add({"name":"gamma", "value":gamma.n, "stdev":gamma.s})
+    out_pars.dump(f"{output}")
+
+# }}}
+
+
+# Lifetime trend plot {{{
+
+rule lifetime_trend:
+  threads: 128
+  input:
+    biased = lambda wcs: expand('output/params/lifetime/{year}/{{mode}}/{{version}}_{{timeacc}}_biased.json', year=YEARS[f'{wcs.year}']),
+    unbiased = lambda wcs: expand('output/params/lifetime/{year}/{{mode}}/{{version}}_{{timeacc}}_unbiased.json', year=YEARS[f'{wcs.year}']),
+    combined = lambda wcs: expand('output/params/lifetime/{year}/{{mode}}/{{version}}_{{timeacc}}_combined.json', year=YEARS[f'{wcs.year}']),
+  output:
+    'output/figures/lifetime/{year}/{mode}/{version}_{timeacc}_trend.pdf',
+  log:
+    'output/log/lifetime_trend/{year}/{mode}/{version}_{timeacc}.log',
+  run:
+    shell(f"""(time\
+    python analysis/lifetime/trend_plot.py\
+    --biased-params {",".join(input.biased)}\
+    --unbiased-params {",".join(input.unbiased)}\
+    --combined-params {",".join(input.combined)}\
+    --figure {output}\
+    --mode {wildcards.mode}\
+    --year {",".join(YEARS[f'{wildcards.year}'])}\
+    ) &> {log}""")
+
+# }}}
+
+
+# Lifetime tables {{{
+#    Create liftetime tables
+
+rule lifetime_tabular_single:
+  threads: 2
+  wildcard_constraints:
+    timeacc = 'single.*'
+  resources:
+    mem_mb=1048
+  input:
+    corr = lambda wcs: expand('output/params/lifetime/{year}/{{mode}}/{{version}}_{{timeacc}}_{{trigger}}.json',
+                              year=YEARS[f'{wcs.year}']),
+    noncorr = lambda wcs: expand('output/params/lifetime/{year}/{{mode}}/{{version}}_{{timeacc}}Noncorr_{{trigger}}.json',
+                                 year=YEARS[f'{wcs.year}']),
+  output:
+    'output/tables/lifetime/{year}/{mode}/{version}_{timeacc}_{trigger}.tex',
+  log:
+    'output/log/lifetime_tabular_single/{year}/{mode}/{version}_{timeacc}_{trigger}.log'
+  run:
+    shell(f"""(time\
+    python analysis/lifetime/lifetime_tables.py\
+    --corr {",".join(input.corr)}\
+    --noncorr {",".join(input.noncorr)}\
+    --output {output}\
+    --mode {wildcards.mode}\
+    --year {",".join(YEARS[f"{wildcards.year}"])}\
+    --version {wildcards.version}\
+    --timeacc {wildcards.timeacc}\
+    ) &> {log}""")
+    if NOTE:
+      notepath = f"{output}".replace('output', NOTE)
+      os.makedirs(os.path.dirname(notepath), exist_ok=True)
+      shell(f"cp {output} {notepath}")
+
+
+rule lifetime_tabular_Bu:
+  threads: 2
+  wildcard_constraints:
+    mode = 'Bu2JpsiKplus',
+    timeacc = 'simul.*'
+  resources:
+    mem_mb=1048
+  input:
+    corr = lambda wcs: expand('output/params/lifetime/{year}/{{mode}}/{{version}}_{{timeacc}}BuasBs_{{trigger}}.json', year=YEARS[f'{wcs.year}']),
+    noncorr = lambda wcs: expand('output/params/lifetime/{year}/{{mode}}/{{version}}_{{timeacc}}NoncorrBuasBs_{{trigger}}.json', year=YEARS[f'{wcs.year}']),
+  output:
+    'output/tables/lifetime/{year}/{mode}/{version}_{timeacc}BuasBs_{trigger}.tex',
+  log:
+    'output/log/lifetime_tabular_Bu/{year}/{mode}/{version}_{timeacc}BuasBs_{trigger}.log'
+  run:
+    shell(f"""(time\
+    python analysis/lifetime/lifetime_tables.py\
+    --corr {",".join(input.corr)}\
+    --noncorr {",".join(input.noncorr)}\
+    --output {output}\
+    --mode {wildcards.mode}\
+    --year {",".join(YEARS[f"{wildcards.year}"])}\
+    --version {wildcards.version}\
+    --timeacc {wildcards.timeacc}\
+    ) &> {log}""")
+    if NOTE:
+      notepath = f"{output}".replace('output', NOTE)
+      shell(f"cp {output} {notepath}")
+
+
+rule lifetime_tabular_bd_as_bs:
+  threads: 2
+  wildcard_constraints:
+    version = "(.*)?(evtEven|evtOdd)(.*)?",
+    mode = 'Bd2JpsiKstar',
+    timeacc = 'simul.*'
+  resources:
+    mem_mb=1048
+  input:
+    corr = lambda wcs: expand('output/params/lifetime/{year}/{{mode}}/{{version}}_{{timeacc}}{mod}BdasBs_{{trigger}}.json',
+                              year=YEARS[f'{wcs.year}'], mod=['', 'mKstar', 'alpha']),
+    noncorr = lambda wcs: expand('output/params/lifetime/{year}/{{mode}}/{{version}}_{{timeacc}}Noncorr{mod}BdasBs_{{trigger}}.json',
+                                 year=YEARS[f'{wcs.year}'], mod=['', 'mKstar', 'alpha']),
+  output:
+    'output/tables/lifetime/{year}/{mode}/{version}_{timeacc}BdasBs_{trigger}.tex',
+  log:
+    'output/log/lifetime_tabular_Bd/{year}/{mode}/{version}_{timeacc}BdasBs_{trigger}.log'
+  run:
+    shell(f"""(time\
+    python analysis/lifetime/lifetime_tables.py\
+    --corr {",".join(input.corr)}\
+    --noncorr {",".join(input.noncorr)}\
+    --output {output}\
+    --mode {wildcards.mode}\
+    --trigger {wildcards.trigger}\
+    --year {",".join(YEARS[f"{wildcards.year}"])}\
+    --version {wildcards.version}\
+    --timeacc {wildcards.timeacc}\
+    ) &> {log}""")
+    if NOTE:
+      notepath = f"{output}".replace('output', NOTE)
+      shell(f"cp {output} {notepath}")
+
+# }}}
+
+
+# vim: fdm=marker

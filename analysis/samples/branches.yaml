@@ -1,0 +1,188 @@
+# BRANCHES
+# This file contains all branches that will be avaliable after the last
+# set of reweightings.
+#
+# 
+# Marcos Romero Lamas (mromerol@cern.ch)
+
+
+# Common branches for all samples {{{
+
+common: &common
+  "time" : "time"
+  "timeT" : "sqrt( (B_SV_X - B_BPV_X)**2 + (B_SV_Y- B_BPV_Y)**2 ) * (1.e-3) * B_M * (1.782662e-30*1e12/(B_PT*5.344286e-22))"
+  "timeBis" : "sqrt( (B_SV_X - B_BPV_X)**2 + (B_SV_Y- B_BPV_Y)**2 + (B_SV_Z- B_BPV_Z)**2) * (1.e-3) * B_M * (1.782662e-30*1e12/(B_P*5.344286e-22))"
+  "cosK" : "helcosthetaK"
+  "cosL" : "helcosthetaL"
+  "hphi" : "helphi"
+  "idB" : "B_ID"
+  "mHH" : "X_M"
+  "mB" : "B_ConstJpsi_M_1"
+  "idHH" : "X_ID"
+  "sigmat" : "sigmat"
+  "pHp" : "hplus_P"
+  "pTHp" : "hplus_PT"
+  "pHm" : "hminus_P"
+  "pTHm" : "hminus_PT"
+  "pLp" : "muplus_P"
+  "pTLp" : "muplus_PT"
+  "pLm" : "muminus_P"
+  "pTLm" : "muminus_PT"
+  "pTB" : "B_PT"
+  "pXB" : "B_PT"
+  "pYB" : "B_PT"
+  "pB" : "B_P"
+  "hlt1b" : "hlt1b"
+  "magnet" : "Polarity"
+  "etaB" : "B_ETA"
+  "evtN" : "eventNumber"
+  "runN" : "runNumber"
+  "sw" : "sw"
+  "veloWeight" : "veloWeight"
+  "docaz" : "doca_z"
+  "logIPchi2B" : "log_B_IPCHI2_mva" #From this point, added by Ramon
+  "chi2dofB" : "B_DTF_CHI2NDOF"
+  "logMINkPNNk" : "log_min_K_PNNk_mva"
+  "chi2Bvx" : "B_VX_CHI2NDOF_mva"
+  "pTX" : "X_PT"
+  "logJpsiVXchi2" : "log_Jpsi_VX_CHI2NDOF_mva"
+  "logMINmuPNNmu" : "log_min_mu_PNNmu_mva"
+  "pidHp" : "hplus_PIDK"
+  "chi2TrackHp" : "hplus_TRACK_CHI2NDOF"
+  "chi2TrackHm" : "hminus_TRACK_CHI2NDOF"
+  "chi2TrackLp" : "muplus_TRACK_CHI2NDOF"
+  "chi2TrackLm" : "muminus_TRACK_CHI2NDOF"
+  "maxChi2TrackH" : "max_K_TRCHI2_mva"
+  "maxChi2TrackL" : "max_mu_TRCHI2_mva"
+  "phiHH" : "phiHH"
+  "Jpsi_Hlt1DiMuonHighMassDecision_TOS": "Jpsi_Hlt1DiMuonHighMassDecision_TOS"
+
+# }}}
+
+
+# MC common variables {{{
+
+MC_common: &MC_common
+  <<: *common
+  "truetimeT" : "sqrt( (B_SV_X - B_BPV_X)**2 + (B_SV_Y- B_BPV_Y)**2 ) * (1.e-3) * B_M * (1.782662e-30*1e12/(B_PT*5.344286e-22))"
+  "truetime" : "1000*B_TRUETAU"
+  "truecosK" : "truehelcosthetaK"
+  "truecosL" : "truehelcosthetaL"
+  "truehphi" : "truehelphi"
+  "gentimeT" : "sqrt( (B_SV_X - B_BPV_X)**2 + (B_SV_Y- B_BPV_Y)**2 ) * (1.e-3) * B_M * (1.782662e-30*1e12/(B_PT*5.344286e-22))"
+  "gentime" : "1000*B_TRUETAU_GenLvl"
+  "gencosK" : "truehelcosthetaK_GenLvl"
+  "gencosL" : "truehelcosthetaL_GenLvl"
+  "genhphi" : "truehelphi_GenLvl"
+  "kbsWeight" : "kbsWeight"
+  "oddWeight" : "oddWeight"
+  "polWeight" : "polWeight"
+  "pdfWeight" : "pdfWeight"
+  "bkgcatB" : "B_BKGCAT"
+  "gbWeight" : "gb_weights"
+
+# }}}
+
+
+# Bs family {{{
+
+Bs2JpsiPhi: # &Bs2JpsiPhi
+  <<: *common
+  "sWeight" : "sigBsSW"
+  "tagOSdec" : "OS_Combination_DEC"
+  "tagSSdec" : "B_SSKaonLatest_TAGDEC"
+  "tagOSeta" : "OS_Combination_ETA"
+  "tagSSeta" : "B_SSKaonLatest_TAGETA"
+  "lbWeight" : "wLb"
+
+MC_Bs2JpsiPhi_dG0: &MC_Bs2JpsiPhi_dG0
+  <<: *MC_common
+  "sWeight" : "sigBsSW"
+  "genidB" : "B_ID_GenLvl"
+
+MC_Bs2JpsiPhi: # &MC_Bs2JpsiPhi
+  <<: *MC_Bs2JpsiPhi_dG0
+  "dg0Weight" : "dg0Weight"
+  "truemHH" : "sqrt(X_TRUEP_E*X_TRUEP_E-(X_TRUEP_X*X_TRUEP_X+X_TRUEP_Y*X_TRUEP_Y+X_TRUEP_Z*X_TRUEP_Z))"
+  "truthMatch" : "(B_BKGCAT == 0 | B_BKGCAT == 10 | (B_BKGCAT == 50 & B_TRUETAU > 0))"
+  # "truthMatch" : "abs(B_TRUEID)==531"
+  # "truthMatch" : "B_BKGCAT!=60 && abs(B_TRUEID)==531"
+
+MC_Bs2JpsiKK_Swave: # &MC_Bs2JpsiKK_Swave
+  <<: *MC_Bs2JpsiPhi_dG0
+  "dg0Weight" : "dg0Weight"
+  "truemHH" : "sqrt((hplus_TRUEP_E+hminus_TRUEP_E)*(hplus_TRUEP_E+hminus_TRUEP_E) - ((hplus_TRUEP_X+hminus_TRUEP_X)*(hplus_TRUEP_X+hminus_TRUEP_X)+(hplus_TRUEP_Y+hminus_TRUEP_Y)*(hplus_TRUEP_Y+hminus_TRUEP_Y)+(hplus_TRUEP_Z+hminus_TRUEP_Z)*(hplus_TRUEP_Z+hminus_TRUEP_Z)))"
+  "truthMatch" : "(B_BKGCAT == 0 | B_BKGCAT == 10 | (B_BKGCAT == 50 & B_TRUETAU > 0))" #"abs(B_TRUEID)==531"
+  # "truthMatch" : "B_BKGCAT!=60 && abs(B_TRUEID)==531"
+
+MC_Bs2JpsiPhi_dG0_large_lifetime:
+  <<: *MC_common
+  "sWeight" : "sw"
+  "genidB" : "B_ID_GenLvl"
+
+MC_Bs2JpsiPhi_Prompt:
+  <<: *MC_common
+  "sWeight" : "sw"
+  "genidB" : "B_ID_GenLvl"
+
+GUN_Bs2JpsiPhi:
+  <<: *MC_common
+  "sWeight" : "sWeight"
+  "genidB" : "B_ID_GenLvl"
+  "mHH" : "1000*MKK"
+
+GUN_Bs2JpsiKK_Swave:
+  <<: *MC_common
+  "sWeight" : "sWeight"
+  "genidB" : "B_ID_GenLvl"
+  # "mHH" : "1000*MKK"
+  "mHH" : "X_M"
+
+# }}}
+
+
+# Bd family {{{
+
+Bd2JpsiKstar: # &Bd2JpsiKstar
+  <<: *common
+  "sWeight" : "sigBdSW"
+  "kbsWeight" : "kbsWeight"
+  "oddWeight" : "oddWeight"
+  "kbuWeight" : "kbuWeight"
+  "tagOSdec" : "0*time"
+  "tagSSdec" : "0*time"
+  "tagOSeta" : "0*time"
+  "tagSSeta" : "0*time"
+
+MC_Bd2JpsiKstar:
+  <<: *MC_common
+  "sWeight" : "sigBdSW"
+  "genidB" : "511*X_ID_GenLvl/313"
+  "kbuWeight" : "kbuWeight"
+  "kbdWeight" : "kbdWeight"
+
+# }}}
+
+
+# Bu family {{{
+
+Bu2JpsiKplus:
+  <<: *common
+  "sWeight" : "sigBuSW"
+  "kbsWeight" : "kbsWeight"
+  "oddWeight" : "oddWeight"
+  "tagOSdec" : "0*time"
+  "tagSSdec" : "0*time"
+  "tagOSeta" : "0*time"
+  "tagSSeta" : "0*time"
+
+MC_Bu2JpsiKplus:
+  <<: *MC_common
+  "kbuWeight" : "kbuWeight"
+  "sWeight" : "sigBuSW"
+  "genidB" : "B_ID_GenLvl"
+
+# }}}
+
+
+# vim:foldmethod=marker

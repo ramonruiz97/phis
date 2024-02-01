@@ -1,0 +1,590 @@
+# DECAY-TIME ACCEPTANCE
+#
+#   Description: Contains all time acceptance-related rules. phis-scq has some
+#                set of rules to compute single-mode time accepntaces and also
+#                simultaneous-mode ones. Each one of the rules accepts different
+#                genomic variants, and also the modes can be swiched.
+#                The time acceptance wildcard can be a bit complex to understand
+#                but is now briefly described:
+#                * single/simul: It always starts by one of these, which 
+#                      basically tell which kind of rules are run.
+#                * #: a number between 2 and 12 that follows the previous word
+#                      tells the environment how many knots your time acceptance
+#                      to be run with.
+#                * Noncorr?: Whether to use reweighting corrections or not,
+#                      if nothing is stated, they will be used.
+#                * Odd?: Whether to use oddWeights or not. This one only applies
+#                      to rules using the @evtEven/@evtOdd version flag. It is
+#                      meant to use with MC checks.
+#                * Flatend?: Whether to use upper decay-time acceptance or just
+#                      place a constat above 2 ps. It is used do compute
+#                      the beta factor, just like in Run1.
+#                * deltat/alpha/mKstar?: It is used to place cuts in these 
+#                      variables for Bd lifetime checks.
+#                * BuasBd?: The baseline is to use Bd as control channel to get
+#                      the time-acceptance. If this is stated, then Bu is
+#                      used as control channel.
+#
+#        Author: Marcos Romero Lamas (mromerol@cern.ch)
+
+
+# Single-sample rules {{{
+
+# Compute acceptance {{{
+#    Here we define the single time acceptance rule which is called to compute
+#    all decay-time acceptances that depend only on one sample.
+# 
+rule time_acceptance_single:
+  threads: 2
+  resources:
+    mem_mb = 1000
+  wildcard_constraints:
+    timeacc = "single.*"
+  input:
+    sample = lambda wcs: tuples(wcs),
+    reso = 'output/params/time_offset/{year}/{mode}/{version}_amsrd.json',
+  output:
+    params = 'output/params/time_acceptance/{year}/{mode}/{version}_{timeacc}_{trigger}.json',
+  log:
+    'output/log/time_acceptance_single/{year}/{mode}/{version}_{timeacc}_{trigger}.log'
+  run:
+    try:
+      contour = config['contour']
+    except:
+      contour = 0
+    shell(f"""(time\
+    python analysis/time_acceptance/single.py\
+    --sample {input.sample}\
+    --resolution {input.reso}\
+    --params {output.params}\
+    --mode {wildcards.mode}\
+    --year {wildcards.year}\
+    --version {wildcards.version}\
+    --trigger {wildcards.trigger}\
+    --timeacc {wildcards.timeacc}\
+    --contour {config['contour']}\
+    ) &> {log}""")
+    send_mail(f"Time Acceptance Single :: {wildcards}", f"{log}")
+
+# }}}
+
+
+# Plot acceptance {{{
+
+rule time_acceptance_single_plot:
+  threads: 2
+  resources:
+    mem_mb=1000
+  wildcard_constraints:
+    timeacc = 'single.*',
+    plot = "(fit|fitlog|spline|splinelog)",
+  input:
+    # should try to rephrase this statement
+    samples = lambda wcs: sum(sum([[[
+      tuples(wcs,version=v, year=y)]
+      for v in f"{wcs.version}".split('+')] for y in YEARS[f'{wcs.year}']], []), []),
+    params = lambda wcs: expand([
+      'output/params/time_acceptance/{year}/{{mode}}/{version}_{timeacc}_{{trigger}}.json',
+    ], timeacc=f"{wcs.timeacc}".split('+'), version=f"{wcs.version}".split('+'), year=YEARS[f'{wcs.year}'])
+  output:
+    'output/figures/time_acceptance/{year}/{mode}/{version}_{timeacc}_{trigger}_{plot}.pdf',
+  log:
+    'output/log/time_acceptance_plot/{year}/{mode}/{version}_{timeacc}_{trigger}_{plot}.log'
+  run:
+    shell(f"""(time\
+    python analysis/time_acceptance/plot_functions_single.py\
+    --samples {",".join(input.samples)}\
+    --params {",".join(input.params)}\
+    --figure {output}\
+    --year {wildcards.year}\
+    --mode {wildcards.mode}\
+    --version {wildcards.version}\
+    --trigger {wildcards.trigger}\
+    --timeacc {wildcards.timeacc}\
+    --plot {wildcards.plot}\
+    ) &> {log}""")
+    send_mail(f"Simultaneous Time Acceptance", f" ", output)
+
+# }}}
+
+# }}}
+
+
+# Simultaneous computations {{{
+#    These are several rules related to decay-time acceptance. The main one is
+#    time_acceptance_simultaneous, which computes the spline coefficients of
+#    the Bs2JpsiPhi acceptance.
+
+# Compute acceptance {{{
+
+# Nominal: Bd as control channel {{{
+
+rule time_acceptance_simultaneous:
+  threads: 2
+  resources:
+    mem_mb=3000
+  wildcard_constraints:
+    timeacc = r"(simul)((?!.*?(BdasBs|BuasBs|BuasBd|DGn0)).*)(.*)?",
+  input:
+    sample = lambda wcs: [
+      tuples(wcs,mode='MC_Bs2JpsiPhi_dG0'),
+      tuples(wcs,mode='MC_Bd2JpsiKstar'),
+      tuples(wcs,mode='Bd2JpsiKstar')
+    ],
+    resos = lambda wcs: [
+      'output/params/time_offset/{year}/MC_Bs2JpsiPhi_dG0/{version}_amsrd.json',
+      'output/params/time_offset/{year}/MC_Bd2JpsiKstar/{version}_amsrd.json',
+      'output/params/time_offset/{year}/Bd2JpsiKstar/{version}_amsrd.json',
+    ]
+  output:
+    params = [
+      'output/params/time_acceptance/{year}/MC_Bs2JpsiPhi_dG0/{version}_{timeacc}_{trigger}.json',
+      'output/params/time_acceptance/{year}/MC_Bd2JpsiKstar/{version}_{timeacc}_{trigger}.json',
+      'output/params/time_acceptance/{year}/Bd2JpsiKstar/{version}_{timeacc}_{trigger}.json'
+    ],
+  log:
+    'output/log/time_acceptance_simultaneous/{year}/{version}_{timeacc}_{trigger}.log'
+  run:
+    try:
+      contour = config['contour']
+    except:
+      contour = 0
+    shell(f"""
+    (time\
+    python analysis/time_acceptance/simultaneous.py\
+    --samples {",".join(input.sample)}\
+    --params {",".join(output.params)}\
+    --resolutions {",".join(input.resos)}\
+    --year {wildcards.year}\
+    --version {wildcards.version}\
+    --trigger {wildcards.trigger}\
+    --timeacc {wildcards.timeacc}\
+    --contour {contour}\
+    --minimizer minuit\
+    ) &> {log}""")
+    send_mail(f"Time Acceptance :: {wildcards}", f"{log}")
+
+# }}}
+
+
+# BuasBd: Use Bu as control channel instead of Bd {{{
+
+rule time_acceptance_simultaneous_BuasBd:
+  threads: 2
+  resources:
+    mem_mb=3000
+  wildcard_constraints:
+    timeacc = r"simul(.*)?BuasBd",
+  input:
+    sample = lambda wcs: [
+      tuples(wcs,mode='MC_Bs2JpsiPhi_dG0'),
+      tuples(wcs,mode='MC_Bu2JpsiKplus'),
+      tuples(wcs,mode='Bu2JpsiKplus')
+    ],
+    resos = lambda wcs: [
+      'output/params/time_offset/{year}/MC_Bs2JpsiPhi_dG0/{version}_amsrd.json',
+      'output/params/time_offset/{year}/MC_Bu2JpsiKplus/{version}_amsrd.json',
+      'output/params/time_offset/{year}/Bu2JpsiKplus/{version}_amsrd.json',
+    ]
+  output:
+    params = [
+      'output/params/time_acceptance/{year}/MC_Bs2JpsiPhi_dG0/{version}_{timeacc}_{trigger}.json',
+      'output/params/time_acceptance/{year}/MC_Bu2JpsiKplus/{version}_{timeacc}_{trigger}.json',
+      'output/params/time_acceptance/{year}/Bu2JpsiKplus/{version}_{timeacc}_{trigger}.json'
+    ],
+  log:
+    'output/log/time_acceptance_simultaneous_BuasBd/{year}/{version}_{timeacc}_{trigger}.log'
+  run:
+    try:
+      contour = config['contour']
+    except:
+      contour = 0
+    shell(f"""(time\
+    python analysis/time_acceptance/simultaneous.py\
+    --samples {",".join(input.sample)}\
+    --params {",".join(output.params)}\
+    --resolutions {",".join(input.resos)}\
+    --year {wildcards.year}\
+    --version {wildcards.version}\
+    --trigger {wildcards.trigger}\
+    --timeacc {wildcards.timeacc}\
+    --contour {contour}\
+    --minimizer minuit\
+    ) &> {log}""")
+    send_mail(f"Time Acceptance :: {wildcards}", f"{log}")
+
+# }}}
+
+
+# BdasBs: Use Bd as proxy for Bs in the Bd lifetime check {{{
+
+rule time_acceptance_simultaneous_BdasBs:
+  threads: 2
+  resources:
+    mem_mb=3000,
+  wildcard_constraints:
+    timeacc = "simul.*",
+    # version = "(.*)(evtEven|evtOdd)(.*)?",
+  input:
+    sample = lambda wcs: [
+      tuples(wcs, version=f'{wcs.version}evtEven', mode='MC_Bd2JpsiKstar'),
+      tuples(wcs, version=f'{wcs.version}evtOdd', mode='MC_Bd2JpsiKstar'),
+      tuples(wcs, version=f'{wcs.version}evtOdd', mode='Bd2JpsiKstar')
+    ],
+    resos = lambda wcs: [
+      'output/params/time_offset/{year}/MC_Bd2JpsiKstar/{version}evtEven_amsrd.json',
+      'output/params/time_offset/{year}/MC_Bd2JpsiKstar/{version}evtOdd_amsrd.json',
+      'output/params/time_offset/{year}/Bd2JpsiKstar/{version}evtOdd_amsrd.json',
+    ]
+  output:
+    params = [
+      'output/params/time_acceptance/{year}/MC_Bd2JpsiKstar/{version}evtEven_{timeacc}BdasBsA_{trigger}.json'.replace('Odd', 'Even'),
+      'output/params/time_acceptance/{year}/MC_Bd2JpsiKstar/{version}evtOdd_{timeacc}BdasBsB_{trigger}.json',
+      'output/params/time_acceptance/{year}/Bd2JpsiKstar/{version}evtOdd_{timeacc}BdasBs_{trigger}.json'
+    ],
+  log:
+    'output/log/time_acceptance_simultaneous/{year}/{version}_{timeacc}BdasBs_{trigger}.log'
+  run:
+    shell(f"""
+    (time\
+    python analysis/time_acceptance/simultaneousBdasBs.py\
+    --samples {",".join(input.sample)}\
+    --resolutions {",".join(input.resos)}\
+    --params {",".join(output.params)}\
+    --year {wildcards.year}\
+    --version {wildcards.version}\
+    --trigger {wildcards.trigger}\
+    --timeacc {wildcards.timeacc}\
+    ) &> {log}""")
+    send_mail(f"Time Acceptance Bd as Bs :: {wildcards}", f"{log}")
+
+# }}}
+
+
+# BuasBs: Use Bu as proxy for Bs in the Bu lifetime check {{{
+
+rule time_acceptance_simultaneous_BuasBs:
+  threads: 2
+  resources:
+    mem_mb=3000
+  wildcard_constraints:
+    timeacc = "simul.*",
+  input:
+    sample = lambda wcs: [
+      tuples(wcs,mode='MC_Bu2JpsiKplus'),
+      tuples(wcs,mode='MC_Bd2JpsiKstar'),
+      tuples(wcs,mode='Bd2JpsiKstar')
+    ]
+  output:
+    params = [
+      'output/params/time_acceptance/{year}/MC_Bu2JpsiKplus/{version}_{timeacc}BuasBs_{trigger}.json',
+      'output/params/time_acceptance/{year}/MC_Bd2JpsiKstar/{version}_{timeacc}BuasBs_{trigger}.json',
+      'output/params/time_acceptance/{year}/Bd2JpsiKstar/{version}_{timeacc}BuasBs_{trigger}.json'
+    ],
+    tables = [
+      'output/tables/time_acceptance/{year}/MC_Bu2JpsiKplus/{version}_{timeacc}BuasBs_{trigger}.tex',
+      'output/tables/time_acceptance/{year}/MC_Bd2JpsiKstar/{version}_{timeacc}BuasBs_{trigger}.tex',
+      'output/tables/time_acceptance/{year}/Bd2JpsiKstar/{version}_{timeacc}BuasBs_{trigger}.tex'
+    ]
+  log:
+    'output/log/time_acceptance_simultaneousBuasBs/{year}/{version}_{timeacc}BuasBs_{trigger}.log'
+  run:
+    shell(f"""
+    (time\
+    python analysis/time_acceptance/simultaneousBuasBs.py\
+    --samples {",".join(input.sample)}\
+    --params  {",".join(output.params)}\
+    --tables  {",".join(output.tables)}\
+    --year    {wildcards.year}\
+    --version {wildcards.version}\
+    --trigger {wildcards.trigger}\
+    --timeacc {wildcards.timeacc}\
+    ) &> {log}""")
+    send_mail(f"Time Acceptance Bu as Bs :: {wildcards}", f"{log}")
+
+# }}}
+
+
+# dGn0: Use DG!=0 MC and Bd control channel (needs dg0Weight) {{{
+
+rule time_acceptance_simultaneous_dGn0:
+  threads: 2
+  resources:
+    mem_mb=3000
+  wildcard_constraints:
+    timeacc = "simul.*",
+  input:
+    sample = lambda wcs: [
+      tuples(wcs, mode='MC_Bs2JpsiPhi'),
+      tuples(wcs, mode='MC_Bd2JpsiKstar'),
+      tuples(wcs, mode='Bd2JpsiKstar')
+    ],
+    resos = lambda wcs: [
+      'output/params/time_offset/{year}/MC_Bs2JpsiPhi_dG0/{version}_amsrd.json',
+      'output/params/time_offset/{year}/MC_Bd2JpsiKstar/{version}_amsrd.json',
+      'output/params/time_offset/{year}/Bd2JpsiKstar/{version}_amsrd.json',
+    ]
+  output:
+    params = [
+      'output/params/time_acceptance/{year}/MC_Bs2JpsiPhi/{version}_{timeacc}DGn0_{trigger}.json',
+      'output/params/time_acceptance/{year}/MC_Bd2JpsiKstar/{version}_{timeacc}DGn0_{trigger}.json',
+      'output/params/time_acceptance/{year}/Bd2JpsiKstar/{version}_{timeacc}DGn0_{trigger}.json'
+    ],
+  log:
+    'output/log/time_acceptance_simultaneous/{year}/{version}_{timeacc}DGn0_{trigger}.log'
+  run:
+    try:
+      contour = config['contour']
+    except:
+      contour = 0
+    shell(f"""
+    (time\
+    python analysis/time_acceptance/simultaneous.py\
+    --samples {",".join(input.sample)}\
+    --params {",".join(output.params)}\
+    --resolutions {",".join(input.resos)}\
+    --year {wildcards.year}\
+    --version {wildcards.version}\
+    --trigger {wildcards.trigger}\
+    --timeacc {wildcards.timeacc}\
+    --contour {contour}\
+    ) &> {log}""")
+    send_mail(f"Time Acceptance Simultaneous DGn0 :: {wildcards}", f"{log}")
+
+# }}}
+
+# }}}
+
+
+# Lifetime fit {{{
+#    These are several rules related to decay-time acceptance. The main one is
+#    time_acceptance, which computes the spline coefficients of the
+#    Bs2JpsiPhi acceptance.
+
+# rule lifetime_fit:
+#   resources:
+#     mem_mb=4096
+#   wildcard_constraints:
+#     trigger = "(biased|unbiased|combined)",
+#   input:
+#     sample = lambda wcs: [
+#       tuples(wcs,mode='MC_Bd2JpsiKstar'),
+#       tuples(wcs,mode='Bd2JpsiKstar')
+#     ]
+#   params:
+#     params = [
+#       'time_acceptance/params/{year}/MC_Bd2JpsiKstar/baseline.json',
+#       'time_acceptance/params/{year}/Bd2JpsiKstar/baseline.json'
+#     ]
+#   output:
+#     params   = 'output/params/time_acceptance/{year}/Bd2JpsiKstar/{version}_lifetimefit.json',
+#     tables   = 'output/tables/time_acceptance/{year}/Bd2JpsiKstar/{version}_lifetimefit.tex',
+#   log:
+#     'output/log/time_acceptance_single/{year}/Bd2JpsiKstar/{version}.log'
+#   run:
+#     shell(f"""
+#     (time\
+#     python analysis/time_acceptance/lifetimefit.py\
+#     --sample {",".join(input.sample)}\
+#     --output-params {",".join(output.params)}\
+#     --output-tables {output.tables}\
+#     --year {wildcards.year}\
+#     --version {wildcards.version}\
+#     ) &> {log}""")
+#     send_mail("Single Time Acceptance", f"{log}")
+
+
+
+rule lifetime_simul_Bd:
+  threads: 2
+  resources:
+    mem_mb=3000
+  wildcard_constraints:
+    version = "(.*)(evtEven)(.*)?",
+    mode = 'Bd2JpsiKstar',
+    timeacc = "simul(.*)?BdasBs"
+  input:
+    sample = lambda wcs: tuples(wcs),
+    # btimeacc = lambda wcs: timeaccs(wcs, version=f"{wcs.version}".replace('Even', 'Odd'), trigger='biased'),
+    # utimeacc = lambda wcs: timeaccs(wcs, version=f"{wcs.version}".replace('Even', 'Odd'), trigger='unbiased'),
+    btimeacc = lambda wcs: timeaccs(wcs, trigger='biased'),
+    utimeacc = lambda wcs: timeaccs(wcs, trigger='unbiased'),
+    resos = lambda wcs: expand('output/params/time_resolution/{year}/{mode}/{version}_amsrd.json',
+                               year=YEARS[wcs.year],
+                               version=wcs.version, mode=wcs.mode)
+  output:
+    'output/params/lifetime/{year}/{mode}/{version}_{timeacc}_{trigger}.json',
+  log:
+    'output/log/lifetime_simul_Bd/{year}/{mode}/{version}_{timeacc}_{trigger}.log'
+  run:
+    samples = input.sample
+    samples = [samples] if isinstance(samples,str) else samples
+    shell(f"""(time\
+    python analysis/time_acceptance/lifetimeBd.py\
+    --sample {",".join(samples)}\
+    --resolutions {",".join(input.resos)}\
+    --biased-params {",".join(input.btimeacc)}\
+    --unbiased-params {",".join(input.utimeacc)}\
+    --output-params {output}\
+    --year {",".join(YEARS[f'{wildcards.year}'])}\
+    --version {wildcards.version}\
+    --timeacc {wildcards.timeacc}\
+    --trigger {wildcards.trigger}\
+    ) &> {log}""")
+    send_mail(f"Lifetime Bd fit :: {wildcards}", f"{log}")
+
+
+rule lifetime_simul_Bu:
+  threads: 2
+  resources:
+    mem_mb=3000
+  wildcard_constraints:
+    mode = 'Bu2JpsiKplus',
+    timeacc = "simul(.*)?BuasBs"
+  input:
+    sample = lambda wcs: tuples(wcs),
+    btimeacc = lambda wcs: timeaccs(wcs, trigger='biased'),
+    utimeacc = lambda wcs: timeaccs(wcs, trigger='unbiased'),
+    resos = lambda wcs: expand('output/params/time_resolution/{year}/{mode}/{version}_amsrd.json',
+                               year=YEARS[wcs.year],
+                               version=wcs.version, mode=wcs.mode)
+  output:
+    'output/params/lifetime/{year}/{mode}/{version}_{timeacc}_{trigger}.json',
+  log:
+    'output/log/lifetime_simul_Bu/{year}/{mode}/{version}_{timeacc}_{trigger}.log'
+  run:
+    samples = input.sample
+    samples = [samples] if isinstance(samples,str) else samples
+    shell(f"""
+    (time\
+    python analysis/time_acceptance/lifetimeBu.py\
+    --sample {",".join(samples)}\
+    --biased-params {",".join(input.btimeacc)}\
+    --unbiased-params {",".join(input.utimeacc)}\
+    --output-params {output}\
+    --year {",".join(YEARS[f'{wildcards.year}'])}\
+    --version {wildcards.version}\
+    --timeacc {wildcards.timeacc}\
+    --trigger {wildcards.trigger}\
+    ) &> {log}""")
+    send_mail(f"Lifetime Bu fit :: {wildcards}", f"{log}")
+
+# }}}
+
+
+# Plot acceptance {{{
+#    These are several rules related to decay-time acceptance. The main one is
+#    time_acceptance, which computes the spline coefficients of the
+#    Bs2JpsiPhi acceptance.
+
+rule time_acceptance_simultaneous_plot:
+  threads: 128
+  resources:
+    mem_mb=16384
+  wildcard_constraints:
+    timeacc = 'simul.*',
+    plot = "(fit|fitlog|spline|splinelog)",
+  input:
+    # should try to rephrase this statement
+    samples = lambda wcs: sum(sum([[[
+      tuples(wcs,version=v, year=y, mode='MC_Bs2JpsiPhi_dG0'),
+      tuples(wcs,version=v, year=y, mode='MC_Bd2JpsiKstar'),
+      tuples(wcs,version=v, year=y, mode='Bd2JpsiKstar')]
+      for v in f"{wcs.mversion}".split('+')] for y in YEARS[f'{wcs.myear}']], []), []),
+    params = lambda wcs: expand([
+      'output/params/time_acceptance/{year}/MC_Bs2JpsiPhi_dG0/{version}_{timeacc}_{{trigger}}.json',
+      'output/params/time_acceptance/{year}/MC_Bd2JpsiKstar/{version}_{timeacc}_{{trigger}}.json',
+      'output/params/time_acceptance/{year}/Bd2JpsiKstar/{version}_{timeacc}_{{trigger}}.json'
+    ], timeacc=f"{wcs.mtimeacc}".split('+'), version=f"{wcs.mversion}".split('+'), year=YEARS[f'{wcs.myear}'])
+  output:
+    'output/figures/time_acceptance/{myear}/{mmode}/{mversion}_{mtimeacc}_{trigger}_{plot}.pdf',
+  log:
+    'output/log/time_acceptance_plot/{myear}/{mmode}/{mversion}_{mtimeacc}_{trigger}_{plot}.log'
+  run:
+    shell(f"""(time\
+    python analysis/time_acceptance/plot_functions.py\
+    --samples {",".join(input.samples)}\
+    --params {",".join(input.params)}\
+    --figure {output}\
+    --year {wildcards.myear}\
+    --mode {wildcards.mmode}\
+    --version {wildcards.mversion}\
+    --trigger {wildcards.trigger}\
+    --timeacc {wildcards.mtimeacc}\
+    --plot {wildcards.plot}\
+    ) &> {log}""")
+    send_mail(f"Simultaneous Time Acceptance", f" ", output)
+
+
+rule lifetime_single_plot:
+  threads: 128
+  resources:
+    mem_mb=16384
+  wildcard_constraints:
+    timeacc = 'single.*',
+    plot = "(fit|fitlog|spline|splinelog)",
+  input:
+    # should try to rephrase this statement
+    samples = lambda wcs: sum(sum([[[
+      tuples(wcs,version=v, year=y)]
+      for v in f"{wcs.version}".split('+')] for y in YEARS[f'{wcs.year}']], []), []),
+    params = lambda wcs: expand([
+      'output/params/lifetime/{year}/{{mode}}/{version}_{timeacc}_{{trigger}}.json',
+    ], timeacc=f"{wcs.timeacc}".split('+'), version=f"{wcs.version}".split('+'), year=YEARS[f'{wcs.year}'])
+  output:
+    'output/figures/lifetime/{year}/{mode}/{version}_{timeacc}_{trigger}_{plot}.pdf',
+  log:
+    'output/log/lifetime_single_plot/{year}/{mode}/{version}_{timeacc}_{trigger}_{plot}.log'
+  run:
+    shell(f"""(time\
+    python analysis/time_acceptance/plot_functions_single.py\
+    --samples {",".join(input.samples)}\
+    --params {",".join(input.params)}\
+    --figure {output}\
+    --year {wildcards.year}\
+    --mode {wildcards.mode}\
+    --version {wildcards.version}\
+    --trigger {wildcards.trigger}\
+    --timeacc {wildcards.timeacc}\
+    --plot {wildcards.plot}\
+    ) &> {log}""")
+    send_mail(f"Simultaneous Time Acceptance", f" ", output)
+
+# }}}
+
+# }}}
+
+
+# Tables  {{{
+#    Packs time acceptance to the note
+
+rule time_acceptance_tabular:
+  resources:
+    mem_mb=1048
+  input:
+    biased = lambda wcs: timeaccs(wcs, trigger='biased'),
+    unbiased = lambda wcs: timeaccs(wcs, trigger='unbiased')
+  output:
+    'output/tables/time_acceptance/{year}/{mode}/{version}_{timeacc}.tex',
+  log:
+    'output/log/pack_time_acceptance/{year}/{mode}/{version}_{timeacc}.log'
+  run:
+    shell(f"""(time\
+    python packandgo/acceptance_tables.py\
+    --biased {",".join(input.biased)}\
+    --unbiased {",".join(input.unbiased)}\
+    --output {output}\
+    --mode {wildcards.mode}\
+    --year {",".join(YEARS[f"{wildcards.year}"])}\
+    --version {wildcards.version}\
+    --timeacc {wildcards.timeacc}\
+    ) &> {log}""")
+    if NOTE:
+      notepath = f"{output}".replace('output', NOTE)
+      os.makedirs(os.path.dirname(notepath), exist_ok=True)
+      shell(f"cp {output} {notepath}")
+
+# }}}
+
+
+# vim:foldmethod=marker

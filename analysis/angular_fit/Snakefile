@@ -1,0 +1,988 @@
+# PHYSICS PARAMS
+#
+#
+
+
+# run2 physics params for Bs {{{
+#     This rule runs the iterative procedure for FullRun2 years using RD.
+#     TODO: remove all the other rules, this one should handle all years
+
+rule physics_params_data_Bs:
+  wildcard_constraints:
+    fit = "(auto|yearly|run2|run2a)(Dual)?(Poldep|magUp|magDown)?",
+    mode = "(Bs2JpsiPhi|Bs2JpsiKstar)"
+  threads: 8
+  resources:
+    memb_mb=4000
+  input:
+    samples = lambda wcs: tuples(wcs, year=f'{wcs.year}'),
+    angacc_biased = lambda wcs: angaccs(wcs, trigger='biased'),
+    angacc_unbiased = lambda wcs: angaccs(wcs, trigger='unbiased'),
+    timeacc_biased = lambda wcs: timeaccs(wcs, trigger='biased'),
+    timeacc_unbiased = lambda wcs: timeaccs(wcs, trigger='unbiased'),
+    csp_factors = lambda wcs: csps(wcs),
+    time_resolution = lambda wcs: timeress(wcs),
+    flavor = lambda wcs: flavors(wcs)
+  output:
+    params = 'output/params/physics_params/{year}/{mode}/{version}_{fit}_{angacc}_{csp}_{flavor}_{timeacc}_{timeres}_{trigger}.json',
+  log:
+    'output/log/physics_params_data/{year}/{mode}/{version}_{fit}_{angacc}_{csp}_{flavor}_{timeacc}_{timeres}_{trigger}.log'
+  run:
+    # WARNING: maybe this needs to be understood
+    samples = input.samples
+    samples = [samples] if isinstance(samples,str) else samples
+    shell(f"""(time\
+    python analysis/angular_fit/fit_data.py\
+    --samples {",".join(samples)}\
+    --angacc-biased {",".join(input.angacc_biased)}\
+    --angacc-unbiased {",".join(input.angacc_unbiased)}\
+    --timeacc-biased {",".join(input.timeacc_biased)}\
+    --timeacc-unbiased {",".join(input.timeacc_unbiased)}\
+    --csp {",".join(input.csp_factors)}\
+    --time-resolution {",".join(input.time_resolution)}\
+    --flavor-tagging {",".join(input.flavor)}\
+    --params {output.params}\
+    --year {",".join(YEARS[f'{wildcards.year}'])}\
+    --fit {wildcards.fit}\
+    --angacc {wildcards.angacc}\
+    --timeacc {wildcards.timeacc}\
+    --trigger {wildcards.trigger}\
+    --version {wildcards.version}\
+    --blind {settings.blinding['blind']}\
+    --scan {config['scan']}\
+    ) &> {log}""")
+    send_mail(f"Physics Parameters RD :: {wildcards}", f"{log}")
+
+# }}}
+
+
+
+# plot projections {{{
+
+rule physics_params_data_Bs_plot:
+  wildcard_constraints:
+    fit = "(auto|yearly|run2|run2a)(Dual)?(Poldep|magUp|magDown)?",
+    mode = "(Bs2JpsiPhi|Bs2JpsiKstar)"
+  threads: 8
+  resources:
+    memb_mb=4000
+  input:
+    samples = lambda wcs: tuples(wcs, year=f'{wcs.year}'),
+    angacc_biased = lambda wcs: angaccs(wcs, trigger='biased'),
+    angacc_unbiased = lambda wcs: angaccs(wcs, trigger='unbiased'),
+    timeacc_biased = lambda wcs: timeaccs(wcs, trigger='biased'),
+    timeacc_unbiased = lambda wcs: timeaccs(wcs, trigger='unbiased'),
+    csp_factors = lambda wcs: csps(wcs),
+    time_resolution = lambda wcs: timeress(wcs),
+    flavor = lambda wcs: flavors(wcs),
+    params = 'output/params/physics_params/{year}/{mode}/{version}_{fit}_{angacc}_{csp}_{flavor}_{timeacc}_{timeres}_{trigger}.json',
+  output:
+    time = 'output/figures/physics_params/{year}/{mode}/{version}_{fit}_{angacc}_{csp}_{flavor}_{timeacc}_{timeres}_{trigger}/time.pdf',
+    cosK = 'output/figures/physics_params/{year}/{mode}/{version}_{fit}_{angacc}_{csp}_{flavor}_{timeacc}_{timeres}_{trigger}/cosK.pdf',
+    cosL = 'output/figures/physics_params/{year}/{mode}/{version}_{fit}_{angacc}_{csp}_{flavor}_{timeacc}_{timeres}_{trigger}/cosL.pdf',
+    hphi = 'output/figures/physics_params/{year}/{mode}/{version}_{fit}_{angacc}_{csp}_{flavor}_{timeacc}_{timeres}_{trigger}/hphi.pdf'
+  log:
+    'output/log/physics_params_plot/{year}/{mode}/{version}_{fit}_{angacc}_{csp}_{flavor}_{timeacc}_{timeres}_{trigger}.log'
+  run:
+    # WARNING: maybe this needs to be understood
+    samples = input.samples
+    samples = [samples] if isinstance(samples,str) else samples
+    figures = os.path.dirname(f"{output.time}")
+    shell(f"""(time\
+    python analysis/angular_fit/plot_projections.py\
+    --samples {",".join(samples)}\
+    --angacc-biased {",".join(input.angacc_biased)}\
+    --angacc-unbiased {",".join(input.angacc_unbiased)}\
+    --timeacc-biased {",".join(input.timeacc_biased)}\
+    --timeacc-unbiased {",".join(input.timeacc_unbiased)}\
+    --csp {",".join(input.csp_factors)}\
+    --time-resolution {",".join(input.time_resolution)}\
+    --flavor-tagging {",".join(input.flavor)}\
+    --params {input.params}\
+    --figures {figures}\
+    --year {",".join(YEARS[f'{wildcards.year}'])}\
+    --fit {wildcards.fit}\
+    --angacc {wildcards.angacc}\
+    --timeacc {wildcards.timeacc}\
+    --trigger {wildcards.trigger}\
+    --version {wildcards.version}\
+    ) &> {log}""")
+    send_mail(f"Physics Parameters RD :: {wildcards}", f"{log}")
+
+
+rule physics_params_data_Bs_scan:
+  wildcard_constraints:
+    fit = "(auto|yearly|run2|run2a)(Dual)?(Poldep|magUp|magDown)?",
+    mode = "(Bs2JpsiPhi|Bs2JpsiKstar)"
+  threads: 8
+  resources:
+    memb_mb=4000
+  input:
+    samples = lambda wcs: tuples(wcs, year=f'{wcs.year}'),
+    angacc_biased = lambda wcs: angaccs(wcs, trigger='biased'),
+    angacc_unbiased = lambda wcs: angaccs(wcs, trigger='unbiased'),
+    timeacc_biased = lambda wcs: timeaccs(wcs, trigger='biased'),
+    timeacc_unbiased = lambda wcs: timeaccs(wcs, trigger='unbiased'),
+    csp_factors = lambda wcs: csps(wcs),
+    time_resolution = lambda wcs: timeress(wcs),
+    flavor = lambda wcs: flavors(wcs),
+    params = 'output/params/physics_params/{year}/{mode}/{version}_{fit}_{angacc}_{csp}_{flavor}_{timeacc}_{timeres}_{trigger}.json',
+  output:
+    directory('output/figures/physics_params/{year}/{mode}/{version}_{fit}_{angacc}_{csp}_{flavor}_{timeacc}_{timeres}_{trigger}/scans/'),
+  log:
+    'output/log/physics_params_scan/{year}/{mode}/{version}_{fit}_{angacc}_{csp}_{flavor}_{timeacc}_{timeres}_{trigger}.log'
+  run:
+    pars = ['fPlon', 'fPper', 'dPpar', 'dPper', 'pPlon', 'lPlon', 'DGsd', 'DGs', 'DM']
+    print(10*"WARNING ")
+    print("You are about to run scans for the likelihood of the phis analysis")
+    print("The directory is going to be UNLOCKED!")
+    print("Proceed under your risk!")
+    print(10*"WARNING ")
+    for p in pars:
+        shell(f"snakemake {input.params} -j -f --unlock") 
+        shell(f"(snakemake {input.params} -j -f --config scan={p}) &> {log}") 
+
+# }}}
+
+
+
+
+# rule physics_params_data_Bs_dll:
+#   wildcard_constraints:
+#     fit = "(auto|yearly|run2|run2a)(Dual)?(Poldep|magUp|magDown)?",
+#     mode = "(Bs2JpsiPhi|Bs2JpsiKstar)"
+#   threads: 8
+#   input:
+#     samples = lambda wcs: tuples(wcs, year=f'{wcs.year}'),
+#     angacc_biased = lambda wcs: angaccs(wcs, trigger='biased'),
+#     angacc_unbiased = lambda wcs: angaccs(wcs, trigger='unbiased'),
+#     timeacc_biased = lambda wcs: timeaccs(wcs, trigger='biased'),
+#     timeacc_unbiased = lambda wcs: timeaccs(wcs, trigger='unbiased'),
+#     csp_factors = lambda wcs: csps(wcs),
+#     time_resolution = lambda wcs: timeress(wcs),
+#     flavor = lambda wcs: flavors(wcs)
+#   output:
+#     params = 'output/params/physics_params/{year}/{mode}/{version}_{fit}_{angacc}_{csp}_{flavor}_{timeacc}_{timeres}_{trigger}.json',
+#   log:
+#     'output/log/physics_params_data/{year}/{mode}/{version}_{fit}_{angacc}_{csp}_{flavor}_{timeacc}_{timeres}_{trigger}.log'
+#   run:
+#     # WARNING: maybe this needs to be understood
+#     samples = input.samples
+#     samples = [samples] if isinstance(samples,str) else samples
+#     shell(f"""(time\
+#     python analysis/angular_fit/fit_data.py\
+#     --samples {",".join(samples)}\
+#     --angacc-biased {",".join(input.angacc_biased)}\
+#     --angacc-unbiased {",".join(input.angacc_unbiased)}\
+#     --timeacc-biased {",".join(input.timeacc_biased)}\
+#     --timeacc-unbiased {",".join(input.timeacc_unbiased)}\
+#     --csp {",".join(input.csp_factors)}\
+#     --time-resolution {",".join(input.time_resolution)}\
+#     --flavor-tagging {",".join(input.flavor)}\
+#     --params {output.params}\
+#     --year {",".join(YEARS[f'{wildcards.year}'])}\
+#     --fit {wildcards.fit}\
+#     --angacc {wildcards.angacc}\
+#     --timeacc {wildcards.timeacc}\
+#     --trigger {wildcards.trigger}\
+#     --version {wildcards.version}\
+#     --blind {settings.blinding['blind']}\
+#     ) &> {log}""")
+#     send_mail(f"Physics Parameters RD :: {wildcards}", f"{log}")
+
+
+rule physics_params_data_Bs_dll_old:
+  wildcard_constraints:
+    mode = "(Bs2JpsiPhi|Bs2JpsiKstar)"
+  threads: 8
+  input:
+    # physics_params_data_Bs rule input
+    samples = lambda wcs: tuples(wcs,
+                                 version=f'{wcs.dversion}',
+                                 year=f'{wcs.dyear}'),
+    bangacc = lambda wcs: angaccs(wcs,
+                                  version=f'{wcs.dversion}',
+                                  angacc=f'{wcs.dangacc}',
+                                  csp=f'{wcs.dcsp}',
+                                  flavor=f'{wcs.dflavor}',
+                                  timeacc=f'{wcs.dtimeacc}',
+                                  timeres=f'{wcs.dtimeres}',
+                                  year=f'{wcs.dyear}',
+                                  trigger='biased'),
+    uangacc = lambda wcs: angaccs(wcs,
+                                  version=f'{wcs.dversion}',
+                                  angacc=f'{wcs.dangacc}',
+                                  csp=f'{wcs.dcsp}',
+                                  flavor=f'{wcs.dflavor}',
+                                  timeacc=f'{wcs.dtimeacc}',
+                                  timeres=f'{wcs.dtimeres}',
+                                  year=f'{wcs.dyear}',
+                                  trigger='unbiased'),
+    btimeacc = lambda wcs: timeaccs(wcs,
+                                    version=f'{wcs.dversion}',
+                                    timeacc=f'{wcs.dtimeacc}',
+                                    year=f'{wcs.dyear}',
+                                    trigger='biased'),
+    utimeacc = lambda wcs: timeaccs(wcs,
+                                    version=f'{wcs.dversion}',
+                                    timeacc=f'{wcs.dtimeacc}',
+                                    year=f'{wcs.dyear}',
+                                    trigger='unbiased'),
+    csp_factors = lambda wcs: csps(wcs,
+                                   version=f'{wcs.dversion}',
+                                   csp=f'{wcs.dcsp}',
+                                   year=f'{wcs.dyear}'),
+    resolution = lambda wcs: timeress(wcs,
+                                      version=f'{wcs.dversion}',
+                                      timeres=f'{wcs.dtimeres}',
+                                      year=f'{wcs.dyear}'),
+    tagging = lambda wcs: flavors(wcs,
+                                  version=f'{wcs.dversion}',
+                                  flavor=f'{wcs.dflavor}',
+                                  year=f'{wcs.dyear}'),
+    pars = 'output/params/physics_params/{pyear}/{mode}/{pversion}_{pfit}_{pangacc}_{pcsp}_{pflavor}_{ptimeacc}_{ptimeres}_{ptrigger}.json',
+    # dparams = 'output/params/physics_params/{dyear}/Bs2JpsiPhi/{dversion}_{dfit}_{dangacc}_{dtimeacc}.json',
+  output:
+    temp('tmp/dlls/{mode}/{dyear}_{dversion}_{dfit}_{dangacc}_{dcsp}_{dflavor}_{dtimeacc}_{dtimeres}_{dtrigger}__vs__{pyear}_{pversion}_{pfit}_{pangacc}_{pcsp}_{pflavor}_{ptimeacc}_{ptimeres}_{ptrigger}.npy')
+  log:
+    'tmp/dlls/{mode}/{dyear}_{dversion}_{dfit}_{dangacc}_{dcsp}_{dflavor}_{dtimeacc}_{dtimeres}_{dtrigger}__vs__{pyear}_{pversion}_{pfit}_{pangacc}_{pcsp}_{pflavor}_{ptimeacc}_{ptimeres}_{ptrigger}.log'
+  run:
+    # WARNING: maybe this needs to be understood
+    samples = input.samples
+    samples = [samples] if isinstance(samples,str) else samples
+    shell(f"""(time\
+    python analysis/angular_fit/fit_data.py\
+    --samples {",".join(samples)}\
+    --angacc-biased {",".join(input.bangacc)}\
+    --angacc-unbiased {",".join(input.uangacc)}\
+    --timeacc-biased {",".join(input.btimeacc)}\
+    --timeacc-unbiased {",".join(input.utimeacc)}\
+    --csp {",".join(input.csp_factors)}\
+    --time-resolution {",".join(input.resolution)}\
+    --flavor-tagging {",".join(input.tagging)}\
+    --input-params {input.pars}\
+    --log-likelihood {output}\
+    --year {",".join(YEARS[f'{wildcards.dyear}'])}\
+    --fit {wildcards.dfit}\
+    --angacc {wildcards.dangacc}\
+    --timeacc {wildcards.dtimeacc}\
+    --trigger {wildcards.dtrigger}\
+    --version {wildcards.dversion}\
+    --blind {settings.blinding['blind']}\
+    ) #&> {log}""")
+    send_mail(f"Physics Parameters RD LL :: {wildcards}", f"{log}")
+
+    # samples = input.samples
+    # samples = [samples] if isinstance(samples,str) else samples
+    # shell(f"""(time\
+    # python analysis/angular_fit/fit_data_agreement.py\
+    # --samples {",".join(samples)}\
+    # --angacc-biased {",".join(input.bangacc)}\
+    # --angacc-unbiased {",".join(input.uangacc)}\
+    # --timeacc-biased {",".join(input.btimeacc)}\
+    # --timeacc-unbiased {",".join(input.utimeacc)}\
+    # --csp {",".join(input.csp_factors)}\
+    # --time-resolution {",".join(input.resolution)}\
+    # --flavor-tagging {",".join(input.tagging)}\
+    # --params {input.params}\
+    # --dll {output}\
+    # --year {",".join(YEARS[f'{wildcards.dyear}'.title()])}\
+    # --flag {wildcards.dfit}_{wildcards.dangacc}_{wildcards.dtimeacc}\
+    # --version {wildcards.dversion}\
+    # --trigger {wildcards.dtrigger}\
+    # --blind {settings.blinding['blind']}\
+    # ) &> {log}""")
+
+
+# dll evaluator for Bs data {{{
+
+# rule physics_params_data_Bs_dll_old:
+#   wildcard_constraints:
+#     mode = "(Bs2JpsiPhi|Bs2JpsiKstar)"
+#   threads: 8
+#   input:
+#     samples = lambda wcs: tuples(wcs, version=f'{wcs.dversion}', year=f'{wcs.dyear}'),
+#     bangacc = lambda wcs: angaccs(wcs, version=f'{wcs.dversion}', angacc=f'{wcs.dangacc}', csp=f'{wcs.dcsp}',
+#                                   flavor=f'{wcs.dflavor}', timeacc=f'{wcs.dtimeacc}',
+#                                   timeres=f'{wcs.dtimeres}', year=f'{wcs.dyear}',
+#                                   trigger='biased'),
+#     uangacc = lambda wcs: angaccs(wcs, version=f'{wcs.dversion}', angacc=f'{wcs.dangacc}', csp=f'{wcs.dcsp}',
+#                                   flavor=f'{wcs.dflavor}', timeacc=f'{wcs.dtimeacc}',
+#                                   timeres=f'{wcs.dtimeres}', year=f'{wcs.dyear}',
+#                                   trigger='unbiased'),
+#     btimeacc = lambda wcs: timeaccs(wcs, version=f'{wcs.dversion}', timeacc=f'{wcs.dtimeacc}', year=f'{wcs.dyear}', trigger='biased'),
+#     utimeacc = lambda wcs: timeaccs(wcs, version=f'{wcs.dversion}', timeacc=f'{wcs.dtimeacc}', year=f'{wcs.dyear}', trigger='unbiased'),
+#     csp_factors = lambda wcs: csps(wcs, version=f'{wcs.dversion}', csp=f'{wcs.dcsp}', year=f'{wcs.dyear}'),
+#     resolution = lambda wcs: timeress(wcs, version=f'{wcs.dversion}', timeres=f'{wcs.dtimeres}', year=f'{wcs.dyear}'),
+#     tagging = lambda wcs: flavors(wcs, version=f'{wcs.dversion}', flavor=f'{wcs.dflavor}', year=f'{wcs.dyear}'),
+#     #
+#     # samples = lambda wcs: tuples(wcs,version=f'{wcs.dversion}',mode='Bs2JpsiPhi',year=f'{wcs.dyear}'.title()),
+#     # Angular acceptance
+#     # angacc_biased = lambda wcs: [
+#     #   f'output/params/angular_acceptance/{y}/Bs2JpsiPhi/
+#     #     {wcs.dversion}_{wcs.dangacc}_{wcs.dtimeacc}_biased.json'
+#     # for y in YEARS[ f"{wcs.dyear}".title() ] ],
+#     # angacc_unbiased = lambda wcs: [
+#     #   f'output/params/angular_acceptance/{y}/Bs2JpsiPhi/
+#     #     {wcs.dversion}_{wcs.dangacc}_{wcs.dtimeacc}_unbiased.json'
+#     # for y in YEARS[ f"{wcs.dyear}".title() ] ],
+#     # Time acceptance coefficients
+#     # timeacc_biased = lambda wcs: [
+#     #   f'output/params/time_acceptance/{y}/Bd2JpsiKstar/{wcs.dversion}_{wcs.dtimeacc}_biased.json'
+#     # for y in YEARS[ f"{wcs.dyear}".title() ]],
+#     # timeacc_unbiased = lambda wcs: [
+#     #   f'output/params/time_acceptance/{y}/Bd2JpsiKstar/{wcs.dversion}_{wcs.dtimeacc}_unbiased.json'
+#     # for y in YEARS[ f"{wcs.dyear}".title() ]],
+#     # # CSP
+#     # csp_factors = lambda wcs: [
+#     #   f'output/params/csp_factors/{y}/Bs2JpsiPhi/{wcs.dversion.split("@")[0]}.json'
+#     # for y in YEARS[ f"{wcs.dyear}".title() ] ],
+#     # # Time resolution
+#     # time_resolution = lambda wcs: [
+#     #   f'output/params/time_resolution/{y}/Bs2JpsiPhi/{wcs.dversion.split("@")[0]}.json'
+#     # for y in YEARS[ f"{wcs.dyear}".title() ] ],
+#     # # Flavor tagging
+#     # flavor = lambda wcs: [
+#     #   f'output/params/flavor_tagging/{y}/Bs2JpsiPhi/{wcs.dversion.split("@")[0]}.json'
+#     # for y in YEARS[ f"{wcs.dyear}".title() ] ],
+#     params = 'output/params/physics_params/{pyear}/{mode}/{pversion}_{pfit}_{pangacc}_{pcsp}_{pflavor}_{ptimeacc}_{ptimeres}_{ptrigger}.json',
+#     # dparams = 'output/params/physics_params/{dyear}/Bs2JpsiPhi/{dversion}_{dfit}_{dangacc}_{dtimeacc}.json',
+#   output:
+#     temp('tmp/dlls/{mode}/{dyear}_{dversion}_{dfit}_{dangacc}_{dcsp}_{dflavor}_{dtimeacc}_{dtimeres}_{dtrigger}__vs__{pyear}_{pversion}_{pfit}_{pangacc}_{pcsp}_{pflavor}_{ptimeacc}_{ptimeres}_{ptrigger}.npy')
+#   log:
+#     'tmp/dlls/{mode}/{dyear}_{dversion}_{dfit}_{dangacc}_{dcsp}_{dflavor}_{dtimeacc}_{dtimeres}_{dtrigger}__vs__{pyear}_{pversion}_{pfit}_{pangacc}_{pcsp}_{pflavor}_{ptimeacc}_{ptimeres}_{ptrigger}.log'
+#   run:
+#     samples = input.samples
+#     samples = [samples] if isinstance(samples,str) else samples
+#     shell(f"""(time\
+#     python analysis/angular_fit/fit_data_agreement.py\
+#     --samples {",".join(samples)}\
+#     --angacc-biased {",".join(input.bangacc)}\
+#     --angacc-unbiased {",".join(input.uangacc)}\
+#     --timeacc-biased {",".join(input.btimeacc)}\
+#     --timeacc-unbiased {",".join(input.utimeacc)}\
+#     --csp {",".join(input.csp_factors)}\
+#     --time-resolution {",".join(input.resolution)}\
+#     --flavor-tagging {",".join(input.tagging)}\
+#     --params {input.params}\
+#     --dll {output}\
+#     --year {",".join(YEARS[f'{wildcards.dyear}'.title()])}\
+#     --flag {wildcards.dfit}_{wildcards.dangacc}_{wildcards.dtimeacc}\
+#     --version {wildcards.dversion}\
+#     --trigger {wildcards.dtrigger}\
+#     --blind {settings.blinding['blind']}\
+#     ) &> {log}""")
+
+
+
+rule physics_params_data_Bx_dll_compare:
+  input:
+    pars_d = 'output/params/physics_params/{dyear}/{mode}/{dversion}_{dfit}_{dangacc}_{dcsp}_{dflavor}_{dtimeacc}_{dtimeres}_{dtrigger}.json',
+    pars_p = 'output/params/physics_params/{pyear}/{mode}/{pversion}_{pfit}_{pangacc}_{pcsp}_{pflavor}_{ptimeacc}_{ptimeres}_{ptrigger}.json',
+    logl_dd = 'tmp/dlls/{mode}/{dyear}_{dversion}_{dfit}_{dangacc}_{dcsp}_{dflavor}_{dtimeacc}_{dtimeres}_{dtrigger}__vs__{dyear}_{dversion}_{dfit}_{dangacc}_{dcsp}_{dflavor}_{dtimeacc}_{dtimeres}_{dtrigger}.npy',
+    logl_dp = 'tmp/dlls/{mode}/{dyear}_{dversion}_{dfit}_{dangacc}_{dcsp}_{dflavor}_{dtimeacc}_{dtimeres}_{dtrigger}__vs__{pyear}_{pversion}_{pfit}_{pangacc}_{pcsp}_{pflavor}_{ptimeacc}_{ptimeres}_{ptrigger}.npy',
+    logl_pd = 'tmp/dlls/{mode}/{pyear}_{pversion}_{pfit}_{pangacc}_{pcsp}_{pflavor}_{ptimeacc}_{ptimeres}_{ptrigger}__vs__{dyear}_{dversion}_{dfit}_{dangacc}_{dcsp}_{dflavor}_{dtimeacc}_{dtimeres}_{dtrigger}.npy',
+    logl_pp = 'tmp/dlls/{mode}/{pyear}_{pversion}_{pfit}_{pangacc}_{pcsp}_{pflavor}_{ptimeacc}_{ptimeres}_{ptrigger}__vs__{pyear}_{pversion}_{pfit}_{pangacc}_{pcsp}_{pflavor}_{ptimeacc}_{ptimeres}_{ptrigger}.npy'
+  output:
+    temp('tmp/pvalues/{mode}/{dyear}_{dversion}_{dfit}_{dangacc}_{dcsp}_{dflavor}_{dtimeacc}_{dtimeres}_{dtrigger}__vs__{pyear}_{pversion}_{pfit}_{pangacc}_{pcsp}_{pflavor}_{ptimeacc}_{ptimeres}_{ptrigger}.npy')
+  run:
+    import numpy as np
+    from ipanema import Parameters
+    from utils.stats import check_DLL_agreement
+    
+    # load likelihoods
+    logls = np.zeros((2,2))
+    logls[0,0] = np.load(f"{input.logl_dd}")
+    logls[0,1] = np.load(f"{input.logl_dp}")
+    logls[1,0] = np.load(f"{input.logl_pd}")
+    logls[1,1] = np.load(f"{input.logl_pp}")
+    # print(logls)
+
+    # load parameters
+    pars = [
+      Parameters.load(f'{input.pars_d}'),
+      Parameters.load(f'{input.pars_p}')
+    ]
+
+    # check agreement
+    s, p, d = check_DLL_agreement(logls, pars, sigmas=True, pvalue=True, ndof=True, mdof=8)
+    #ans = f"{wildcards.pyear:>10} & {wildcards.pversion:>10} & {wildcards.pfit:>10} & {wildcards.pangacc:>10} & {wildcards.ptimeacc:>10} & {wildcards.dyear:>10} & {wildcards.dversion:>10} & {wildcards.dfit:>10} & {wildcards.dangacc:>10} & {wildcards.dtimeacc:>10} & ${s:+.2f}\sigma$ & ${p:.4f}$ & ${d:.0f}$"
+    ans = np.float64([s, p, d])
+    # print(ans)
+
+    # write
+    # with open(f'{output}','w') as fp:
+    #   fp.write(ans)
+    # fp.close()
+    np.save(f"{output}", ans)
+
+# }}}
+
+
+
+
+# # Run2a angular acceptance -----------------------------------------------------
+# #     This rule runs the iterative procedure for Run2a years (2015&2016) using
+# #     both MC and MC_dG0 files.
+# rule physics_params_data_run2a:
+#   threads: 8
+#   input:
+#     samples = lambda wcs: tuples(wcs,mode='Bs2JpsiPhi',year='Run2a'),
+#     # Angular acceptance
+#     angacc_biased = [
+#       'output/params/angular_acceptance/2015/Bs2JpsiPhi/{version}_{angacc}_{timeacc}_biased.json',
+#       'output/params/angular_acceptance/2016/Bs2JpsiPhi/{version}_{angacc}_{timeacc}_biased.json'
+#     ],
+#     angacc_unbiased = [
+#       'output/params/angular_acceptance/2015/Bs2JpsiPhi/{version}_{angacc}_{timeacc}_unbiased.json',
+#       'output/params/angular_acceptance/2016/Bs2JpsiPhi/{version}_{angacc}_{timeacc}_unbiased.json'
+#     ],
+#     # Time acceptance coefficients
+#     timeacc_biased = [
+#       'output/params/time_acceptance/2015/Bd2JpsiKstar/{version}_{timeacc}_biased.json',
+#       'output/params/time_acceptance/2016/Bd2JpsiKstar/{version}_{timeacc}_biased.json'
+#     ],
+#     timeacc_unbiased = [
+#       'output/params/time_acceptance/2015/Bd2JpsiKstar/{version}_{timeacc}_unbiased.json',
+#       'output/params/time_acceptance/2016/Bd2JpsiKstar/{version}_{timeacc}_unbiased.json'
+#     ],
+#     # CSP
+#     csp_factors = lambda wcs: [
+#       f'output/params/csp_factors/2015/Bs2JpsiPhi/{wcs.version.split("@")[0]}.json',
+#       f'output/params/csp_factors/2016/Bs2JpsiPhi/{wcs.version.split("@")[0]}.json'
+#     ],
+#     # Time resolution
+#     time_resolution = lambda wcs: [
+#       f'output/params/time_resolution/2015/Bs2JpsiPhi/{wcs.version.split("@")[0]}.json',
+#       f'output/params/time_resolution/2016/Bs2JpsiPhi/{wcs.version.split("@")[0]}.json'
+#     ],
+#     # Flavor tagging
+#     flavor = lambda wcs: [
+#       f'output/params/flavor_tagging/2015/Bs2JpsiPhi/{wcs.version.split("@")[0]}.json',
+#       f'output/params/flavor_tagging/2016/Bs2JpsiPhi/{wcs.version.split("@")[0]}.json'
+#     ],
+#   output:
+#     params = 'output/params/physics_params/run2a/Bs2JpsiPhi/{version}_run2a_{angacc}_{timeacc}.json',
+#     tables = 'output/tables/angular_fit/run2a/Bs2JpsiPhi/{version}_run2a_{angacc}_{timeacc}.tex'
+#   log:
+#     'output/log/physics_params_data/run2a/Bs2JpsiPhi/{version}_{angacc}_{timeacc}.log'
+#   run:
+#     shell(f"""(time\
+#     python analysis/angular_fit/fit_data.py\
+#            --samples                 {",".join(input.samples)}\
+#            --angacc-biased           {",".join(input.angacc_biased)}\
+#            --angacc-unbiased         {",".join(input.angacc_unbiased)}\
+#            --timeacc-biased          {",".join(input.timeacc_biased)}\
+#            --timeacc-unbiased        {",".join(input.timeacc_unbiased)}\
+#            --csp                     {",".join(input.csp_factors)}\
+#            --time-resolution         {",".join(input.time_resolution)}\
+#            --flavor-tagging          {",".join(input.flavor)}\
+#            --params                  {output.params}\
+#            --tables                  {output.tables}\
+#            --year                    {",".join(YEARS['Run2a'])}\
+#            --flag                    run2a_{wildcards.angacc}_{wildcards.timeacc}\
+#            --version                 {wildcards.version}\
+#            --blind                   {settings.blinding['blind']}\
+#     ) &> {log}""")
+#     send_mail(f"Physics Parameters RD Run2a", f"{log}")
+#
+#
+#
+# # Yearly time-dependent angular fit {{{
+# #     This rule runs the iterative procedure for Run2a years (2015&2016) using
+# #     both MC and MC_dG0 files.
+#
+# rule physics_params_data_yearly:
+#   wildcard_constraints:
+#     fit = "yearly.*"
+#   threads: 8
+#   input:
+#     samples = lambda wcs: [tuples(wcs,mode='Bs2JpsiPhi')],
+#     # Angular acceptance
+#     angacc_biased = [
+#       'output/params/angular_acceptance/{year}/Bs2JpsiPhi/{version}_{angacc}_{timeacc}_biased.json'
+#     ],
+#     angacc_unbiased = [
+#       'output/params/angular_acceptance/{year}/Bs2JpsiPhi/{version}_{angacc}_{timeacc}_unbiased.json'
+#     ],
+#     # Time acceptance coefficients
+#     timeacc_biased = lambda wcs : expand(
+#         'output/params/time_acceptance/{{year}}/{mode}/{{version}}_{{timeacc}}_biased.json',
+#         mode='MC_Bs2JpsiPhi_dG0' if f'{wcs.timeacc}'=='single' else 'Bd2JpsiKstar'
+#     ),
+#     timeacc_unbiased = lambda wcs : expand(
+#         'output/params/time_acceptance/{{year}}/{mode}/{{version}}_{{timeacc}}_unbiased.json',
+#         mode='MC_Bs2JpsiPhi_dG0' if f'{wcs.timeacc}'=='single' else 'Bd2JpsiKstar'
+#     ),
+#     # CSP
+#     csp_factors = lambda wcs: [
+#       f'output/params/csp_factors/{wcs.year}/Bs2JpsiPhi/{wcs.version.split("@")[0]}.json'
+#     ],
+#     # Time resolution
+#     time_resolution = lambda wcs: [
+#       f'output/params/time_resolution/{wcs.year}/Bs2JpsiPhi/{wcs.version.split("@")[0]}.json'
+#     ],
+#     # Flavor tagging
+#     flavor = lambda wcs: [
+#       f'output/params/flavor_tagging/{wcs.year}/Bs2JpsiPhi/{wcs.version.split("@")[0]}.json'
+#     ],
+#   output:
+#     params = 'output/params/physics_params/{year}/Bs2JpsiPhi/{version}_{fit}_{angacc}_{timeacc}_{trigger}.json',
+#   log:
+#     'output/log/physics_params_data/{year}/Bs2JpsiPhi/{version}_{fit}_{angacc}_{timeacc}_{trigger}.log'
+#   run:
+#     shell(f"""(time\
+#     python analysis/angular_fit/fit_data.py\
+#     --samples {",".join(input.samples)}\
+#     --angacc-biased {",".join(input.angacc_biased)}\
+#     --angacc-unbiased {",".join(input.angacc_unbiased)}\
+#     --timeacc-biased {",".join(input.timeacc_biased)}\
+#     --timeacc-unbiased {",".join(input.timeacc_unbiased)}\
+#     --csp {",".join(input.csp_factors)}\
+#     --time-resolution {",".join(input.time_resolution)}\
+#     --flavor-tagging {",".join(input.flavor)}\
+#     --params {output.params}\
+#     --year {",".join([wildcards.year])}\
+#     --version {wildcards.version}\
+#     --flag yearly_{wildcards.angacc}_{wildcards.timeacc}\
+#     --trigger {wildcards.trigger}\
+#     --blind {settings.blinding['blind']}\
+#     ) &> {log}""")
+#     send_mail(f"Physics Parameters RD Yearly :: {wildcards}", f"{log}")
+#
+# # }}}
+
+
+
+rule physics_params_mc:
+  wildcard_constraints:
+    fit = ".*(Poldep|magUp|magDown)?",
+    mode = "(MC_Bs2JpsiPhi|MC_Bs2JpsiPhi_dG0)",
+    version = "(.*)@(.*)?evtOdd(.*)?"
+  threads: 8
+  input:
+    samples = lambda wcs: tuples(wcs,year=f"{wcs.year}"),
+    # Angular acceptance
+    angacc_biased = lambda wcs: expand(
+      "output/params/angular_acceptance/{year}/{mode}/{version}_{accs}_biased.json",
+        year=YEARS[f'{wcs.year}'], version=f'{wcs.version}'.replace('Odd','Even'), mode=f'{wcs.mode}',
+        accs=f'{wcs.angacc}_{wcs.timeacc}' if f'{wcs.angacc}'[:5] not in ('corre', 'naive', 'analy') else f'{wcs.angacc}'
+    ),
+    angacc_unbiased = lambda wcs: expand(
+      "output/params/angular_acceptance/{year}/{mode}/{version}_{accs}_unbiased.json",
+        year=YEARS[f'{wcs.year}'], version=f'{wcs.version}'.replace('Odd','Even'),mode=f'{wcs.mode}',
+        accs=f'{wcs.angacc}_{wcs.timeacc}' if f'{wcs.angacc}'[:5] not in ('corre', 'na', 'analy') else f'{wcs.angacc}'
+    ),
+    # Time acceptance coefficients
+    timeacc_biased = lambda wcs: expand(
+      'output/params/time_acceptance/{year}/{mode}/{version}_{timeacc}_biased.json',
+        year=YEARS[f'{wcs.year}'], version=f'{wcs.version}'.replace('Odd','Even'), mode=f'{wcs.mode}',timeacc=f'{wcs.timeacc}'
+    ),
+    timeacc_unbiased = lambda wcs: expand(
+      'output/params/time_acceptance/{year}/{mode}/{version}_{timeacc}_unbiased.json',
+        year=YEARS[f'{wcs.year}'], version=f'{wcs.version}'.replace('Odd','Even'), mode=f'{wcs.mode}',timeacc=f'{wcs.timeacc}'
+    ),
+    # CSP
+    csp_factors = lambda wcs: expand(
+      'output/params/csp_factors/{year}/{mode}/{version}.json',
+        year=YEARS[f'{wcs.year}'], mode=f'{wcs.mode}',version=f'{wcs.version.split("@")[0].split("bdt")[0]}',
+    ),
+    # # Time resolution
+    # time_resolution = lambda wcs: expand(
+    #   'output/params/time_resolution/{year}/{mode}/{version}.json',
+    #     year=YEARS[f'{wcs.year}'], mode=f'{wcs.mode}',version=f'{wcs.version.split("@")[0].split("bdt")[0]}',
+    # ),
+    # # Flavor tagging
+    # flavor = lambda wcs: expand(
+    #   'output/params/flavor_tagging/{year}/{mode}/{version}.json',
+    #     year=YEARS[f'{wcs.year}'], mode=f'{wcs.mode}',version=f'{wcs.version.split("@")[0].split("bdt")[0]}',
+    # ),
+  output:
+    params = 'output/params/physics_params/{year}/{mode}/{version}_{fit}_{angacc}_{timeacc}.json',
+    tables = 'output/tables/angular_fit/{year}/{mode}/{version}_{fit}_{angacc}_{timeacc}.tex'
+  log:
+    'output/log/physics_params_mc/{year}/{mode}/{version}_{fit}_{angacc}_{timeacc}.log'
+  run:
+    shell(f"""(time\
+    python analysis/angular_fit/fit_mc.py\
+    --samples {",".join(input.samples)}\
+    --angacc-biased {",".join(input.angacc_biased)}\
+    --angacc-unbiased {",".join(input.angacc_unbiased)}\
+    --timeacc-biased {",".join(input.timeacc_biased)}\
+    --timeacc-unbiased {",".join(input.timeacc_unbiased)}\
+    --csp {",".join(input.csp_factors)}\
+    --params {output.params}\
+    --tables {output.tables}\
+    --year {",".join(YEARS[f'{wildcards.year}'])}\
+    --flag {wildcards.fit}_{wildcards.angacc}_{wildcards.timeacc}\
+    --version {wildcards.version}\
+    ) #&> {log}""")
+    send_mail(f"Physics Parameters MC :: {wildcards}", f"{log}")
+
+
+
+
+# fit toy data {{{
+#     This rule runs the iterative procedure for Run2a years (2015&2016) using
+#     both MC and MC_dG0 files.
+
+rule physics_params_toy:
+  threads: 8
+  wildcard_constraints:
+    mode = "(TOY|MC)_(Bs2JpsiPhi(_dG0)?|Bs2JpsiKK_Swave)"
+  input:
+    samples = lambda wcs: [tuples(wcs)],
+    # CSP
+    csp_factors = lambda wcs: [
+      f'output/params/csp_factors/{wcs.year}/{wcs.mode}/{wcs.version}_{wcs.csp}.json',
+    ],
+  output:
+    params = 'output/params/physics_params/{year}/{mode}/{version}_{fit}_{angacc}_{csp}_{flavor}_{timeacc}_{timeres}_{trigger}.json',
+  log:
+    'output/log/physics_params_mc/{year}/{mode}/{version}_{fit}_{angacc}_{csp}_{flavor}_{timeacc}_{timeres}_{trigger}.log'
+  run:
+    shell(f"""(time\
+    python analysis/angular_fit/fit_mc.py\
+           --samples                 {",".join(input.samples)}\
+           --csp                     {",".join(input.csp_factors)}\
+           --params                  {output.params}\
+           --year                    {",".join([wildcards.year])}\
+           --version                 {wildcards.version}\
+           --mode                    {wildcards.mode}\
+    ) #&> {log}""")
+    send_mail(f"Physics Parameters Toy :: {wildcards}", f"{log}")
+
+# }}}
+
+
+
+# create pull tables {{{
+
+rule physics_params_mcfit_vs_mcgen:
+  threads: 8
+  wildcard_constraints:
+    mode = "(TOY|MC)_(Bs2JpsiPhi(_dG0)?|ßd2JpsiKstar|Bs2JpsiKK_Swave)"
+  input:
+    'output/params/physics_params/{year}/{mode}/{version}_{config}.json',
+  params:
+    lambda wcs: expand('analysis/params/generator/{year}/{mode}.json',
+                        year=min(2018, int(f"{wcs.year}")), mode=f"{wcs.mode}")
+  output:
+    'output/tables/physics_params/{year}/{mode}/{version}_{config}_compareGen.tex'
+  log:
+    'output/log/physics_params_mcfit_vs_mcgen/{year}/{mode}/{version}_{config}.log'
+  run:
+    from ipanema import Parameters
+    fit_parameters = f"{input}"
+    gen_parameters = f"{params}"[2:-2]
+    # print(gen_parameters)
+    fit = Parameters.load(fit_parameters)
+    gen = Parameters.load(gen_parameters)
+    table = []
+    table.append(f' {"Parameter":>30}  &  {"Fitted":>25}  &  {"Generation":>7}  &  {"Pull":>4}')
+    for par in fit.keys():
+      if par in gen.keys():
+        table.append(f'${fit[par].latex:>30} $&$ {f"{fit[par].uvalue:.2uL}":>25} $&$ {gen[par].value:+.4f} $&$ {(fit[par].value-gen[par].value)/fit[par].stdev if fit[par].stdev else 0:+.1f}')
+      else:
+        table.append(f'${fit[par].latex:>30} $&$ {f"{fit[par].uvalue:.2uL}":>25}')
+    print(" \\\\ \n".join(table))
+    with open(f'{output}','w') as f:
+      f.write("\\begin{tabular}{lccc}\n")
+      f.write("\n".join(table))
+      f.write("\n\\end{tabular}")
+    f.close()
+
+
+rule physics_params_tabulate_versions:
+  """
+  General rule to create tables of physics params with pvalues
+  """
+  threads: 8
+  input:
+      lambda wcs: expand('output/params/physics_params/{year}/{mode}/{version}_{fit}_{angacc}_{csp}_{flavor}_{timeacc}_{timeres}_{trigger}.json',
+            year = wcs.myear.split('+'),
+            mode = wcs.mmode.split('+'),
+            version = wcs.mversion.split('+'),
+            # fit = [f.replace('run2', y) for f,y in zip(wcs.mfit.split('+'), wcs.myear.split('+'))],
+            fit = wcs.mfit.split('+'),
+            angacc = wcs.mangacc.split('+'),
+            csp = wcs.mcsp.split('+'),
+            flavor = wcs.mflavor.split('+'),
+            timeacc = wcs.mtimeacc.split('+'),
+            timeres = wcs.mtimeres.split('+'),
+            trigger = wcs.mtrigger.split('+')
+            ),
+  output:
+    'output/tables/physics_params/{myear}/{mmode}/{mversion}_{mfit}_{mangacc}_{mcsp}_{mflavor}_{mtimeacc}_{mtimeres}_{mtrigger}.tex'
+  log:
+    'output/log/physics_params_tabulate/{myear}/{mmode}/{mversion}_{mfit}_{mangacc}_{mcsp}_{mflavor}_{mtimeacc}_{mtimeres}_{mtrigger}.log'
+  run:
+    import ipanema
+    import numpy as np
+    import sys
+    from iminuit import Minuit
+    from scipy.stats import chi2
+
+    pars = f"{input}".split(" ")
+    pars = [ipanema.Parameters.load(p) for p in pars]
+    # vers = f"{wildcards.version}".split("+")
+    
+    wilds = []
+    for p in f"{input}".split(" "):
+        file_name = os.path.basename(p)
+        _year = p.split("/")[3]
+        _mode = p.split("/")[4]
+        # exit()
+        _v, _fit, _a, _c, _f, _t, _r, _trig = file_name.split("_")
+        wilds.append({
+                "version" : _v,
+                "fit" : _fit.replace("auto",_year),
+                "angacc" : _a.replace("yearly",_year),
+                "csp" : _c,
+                "flavor" : _f,
+                "timeacc" : _t,
+                "timeres" : _r,
+                "trigger" : _trig.split(".")[0]
+                })
+    # print(wilds)
+    # attending to version, build a header row
+    header = []
+    for i, kw in enumerate(wilds[0]):
+        _header = [f"{' ':<54}"]
+        for w in wilds:
+            _header.append(f"$ {f'{w[kw]}':>25} $")
+        _header += [f"{' ':>10}"]
+        if i == len(wilds[0])-1:
+            _header[0] = f"{'Parameter':<54}"
+            _header[-1] = f"{'pvalue':>10}"
+        header.append( " & ".join(_header) )
+    # print("\\\\ \n".join(header))
+
+    _calign = 'l|' + 'c'*len(pars) + '|c'
+    # lets build the tble
+    table = []
+    # table.append(" & ".join(_header))
+    # print(table)
+    # exit()
+
+    if 'Poldep' in wildcards.mfit:
+        _params = ['fPlon', 'fPper', 
+                'fSlon1', 'fSlon2', 'fSlon3', 'fSlon4', 'fSlon5', 'fSlon6', 
+                'dPpar', 'dPper',
+                'pPlon',
+                'pSlon', 'pPpar', 'pPper',
+                'dSlon1', 'dSlon2', 'dSlon3', 'dSlon4', 'dSlon5', 'dSlon6', 
+                'lPlon',
+                'lSlon', 'lPpar', 'lPper',
+                'DGsd', 'DGs', 'DM']
+    else:
+        _params = ['fPlon', 'fPper', 
+                   'dPpar', 'dPper',
+                   'pPlon',
+                   # 'pSlon', 'pPpar', 'pPper',
+                   'lPlon',
+                   # 'lSlon', 'lPpar', 'lPper',
+                   'DGsd', 'DGs', 'DM',
+                   # 'fSlon1', 'fSlon2', 'fSlon3', 'fSlon4', 'fSlon5', 'fSlon6', 
+                   # 'dSlon1', 'dSlon2', 'dSlon3', 'dSlon4', 'dSlon5', 'dSlon6', 
+                ]
+    for p in _params:
+        _row = [  f"$ {pars[0][p].latex:>50} $" ]
+        for P in pars:
+            _row.append( f"$ {f'{P[p].uvalue:.2uL}':>25} $" )
+        if len(pars) > 1:
+            # get from parameters objects
+            central_values = [P[p].uvalue.n for P in pars]
+            standard_deviations = [P[p].uvalue.s for P in pars]
+            def compute_chi2(reference_value):
+                chi2 = 0.0
+                for v, s in zip(central_values, standard_deviations):
+                    chi2 += ((v - reference_value)/s)**2
+                return chi2
+            if all(standard_deviations):
+                # do linear fit on those numbers
+                p = 'reference_value'
+                result = Minuit(compute_chi2, reference_value=0.0, errordef=1)
+                result.migrad()
+                pval = chi2.sf(result.fval, len(central_values)-1)
+            else:
+                pval = 0
+            _row.append(f"$ {pval:+.3f} $")
+        table.append(" & ".join(_row))
+    with open(f'{output}','w') as f:
+      f.write(rf"\begin{{tabular}}{{{_calign}}}")
+      f.write('\n')
+      f.write(f'\hline')
+      f.write('\n')
+      f.write("\\\\ \n".join(header))
+      f.write('\\\\ \n')
+      f.write(f'\hline')
+      f.write(f'\hline')
+      f.write('\n')
+      f.write("\\\\ \n".join(table))
+      f.write('\\\\ \n')
+      f.write(f'\hline')
+      f.write('\n')
+      f.write(r"\end{tabular}")
+    f.close()
+
+
+rule physics_params_tabulate_systematic:
+  """
+  General rule to create tables of physics params with pvalues
+  """
+  wildcard_constraints:
+    mtrigger = "((?!.*?(total)).*)",
+  threads: 8
+  input:
+      lambda wcs: expand('output/params/physics_params/{year}/{mode}/{version}_{fit}_{angacc}_{csp}_{flavor}_{timeacc}_{timeres}_{trigger}.json',
+            year = config['year'],
+            mode = 'Bs2JpsiPhi',
+            version = config['version'] + '@LcosK',
+            # fit = [f.replace('run2', y) for f,y in zip(wcs.mfit.split('+'), wcs.myear.split('+'))],
+            fit = config['fit'],
+            angacc = config['angacc'],
+            csp = config['csp'],
+            flavor = config['flavor'],
+            timeacc = config['timeacc'],
+            timeres = config['timeres'],
+            trigger = config['trigger']
+            ),
+      lambda wcs: expand('output/params/physics_params/{year}/{mode}/{version}_{fit}_{angacc}_{csp}_{flavor}_{timeacc}_{timeres}_{trigger}.json',
+            year = wcs.myear.split('+'),
+            mode = wcs.mmode.split('+'),
+            version = wcs.mversion.split('+'),
+            # fit = [f.replace('run2', y) for f,y in zip(wcs.mfit.split('+'), wcs.myear.split('+'))],
+            fit = wcs.mfit.split('+'),
+            angacc = wcs.mangacc.split('+'),
+            csp = wcs.mcsp.split('+'),
+            flavor = wcs.mflavor.split('+'),
+            timeacc = wcs.mtimeacc.split('+'),
+            timeres = wcs.mtimeres.split('+'),
+            trigger = wcs.mtrigger.split('+')
+            ),
+  output:
+    'output/tables/systematics/{myear}/{mmode}/{mversion}_{mfit}_{mangacc}_{mcsp}_{mflavor}_{mtimeacc}_{mtimeres}_{mtrigger}.tex'
+  log:
+    'output/log/physics_params_tabulate_systematics/{myear}/{mmode}/{mversion}_{mfit}_{mangacc}_{mcsp}_{mflavor}_{mtimeacc}_{mtimeres}_{mtrigger}.log'
+  run:
+    import ipanema
+    import numpy as np
+    import sys
+    from iminuit import Minuit
+    from scipy.stats import chi2
+
+    pars = f"{input}".split(" ")
+    pars = [ipanema.Parameters.load(p) for p in pars]
+    # vers = f"{wildcards.version}".split("+")
+    
+    wilds = []
+    for p in f"{input}".split(" "):
+        file_name = os.path.basename(p)
+        _year = p.split("/")[3]
+        _mode = p.split("/")[4]
+        # exit()
+        _v, _fit, _a, _c, _f, _t, _r, _trig = file_name.split("_")
+        wilds.append({
+                "version" : _v,
+                "fit" : _fit.replace("auto",_year),
+                "angacc" : _a.replace("yearly",_year),
+                "csp" : _c,
+                "flavor" : _f,
+                "timeacc" : _t,
+                "timeres" : _r,
+                "trigger" : _trig.split(".")[0]
+                })
+    # print(wilds)
+    # attending to version, build a header row
+    header = []
+    for i, kw in enumerate(wilds[0]):
+        _header = [f"{' ':<54}"]
+        for w in wilds:
+            _header.append(f"$ {f'{w[kw]}':>25} $")
+        _header += [f"{' ':>10}"]
+        # _header += [f"{' ':>10}"]
+        if i == len(wilds[0])-1:
+            _header[0] = f"{'Parameter':<54}"
+            # _header[-1] = f"{'pvalue':>10}"
+            _header[-1] = f"{'syst.':>10}"
+        header.append( " & ".join(_header) )
+    # print("\\\\ \n".join(header))
+
+    _calign = 'l|' + 'c'*len(pars) + '|c'
+    # lets build the tble
+    table = []
+    # table.append(" & ".join(_header))
+    # print(table)
+    # exit()
+
+    if 'Poldep' in wildcards.mfit:
+        _params = ['fPlon', 'fPper', 
+                'fSlon1', 'fSlon2', 'fSlon3', 'fSlon4', 'fSlon5', 'fSlon6', 
+                'dPpar', 'dPper',
+                'pPlon',
+                'pSlon', 'pPpar', 'pPper',
+                'dSlon1', 'dSlon2', 'dSlon3', 'dSlon4', 'dSlon5', 'dSlon6', 
+                'lPlon',
+                'lSlon', 'lPpar', 'lPper',
+                'DGsd', 'DGs', 'DM']
+    else:
+        _params = ['fPlon', 'fPper', 
+                   'dPpar', 'dPper',
+                   'pPlon',
+                   # 'pSlon', 'pPpar', 'pPper',
+                   'lPlon',
+                   # 'lSlon', 'lPpar', 'lPper',
+                   'DGsd', 'DGs', 'DM',
+                   # 'fSlon1', 'fSlon2', 'fSlon3', 'fSlon4', 'fSlon5', 'fSlon6', 
+                   # 'dSlon1', 'dSlon2', 'dSlon3', 'dSlon4', 'dSlon5', 'dSlon6', 
+                ]
+    for p in _params:
+        _row = [  f"$ {pars[0][p].latex:>50} $" ]
+        for P in pars:
+            _row.append( f"$ {f'{P[p].uvalue:.2uL}':>25} $" )
+        if len(pars) > 1:
+            # get from parameters objects
+            central_values = [P[p].uvalue.n for P in pars]
+            standard_deviations = [P[p].uvalue.s for P in pars]
+            def compute_chi2(reference_value):
+                chi2 = 0.0
+                for v, s in zip(central_values[1:], standard_deviations[1:]):
+                    chi2 += ((v - reference_value)/s)**2
+                return chi2
+
+            # do linear fit on those numbers
+            p = 'reference_value'
+            result = Minuit(compute_chi2, reference_value=0.0, errordef=1)
+            result.migrad()
+            pval = chi2.sf(result.fval, len(central_values)-1-1)
+            systs = [c-central_values[0] for c in central_values]
+            systs = np.array(systs)
+            signs = systs/np.abs(systs)
+            syst = np.amax(np.abs(systs))
+            syst *= signs[np.abs(systs) == syst]
+            # _row.append(f"$ {pval:+.3f} $")  # for pvalue
+            syst = syst if len(syst) < 2 else syst[0]
+            # print(np.float64(syst))
+            _row.append(f"$ {np.float64(syst):+.4f} $")
+        table.append(" & ".join(_row))
+    with open(f'{output}','w') as f:
+      f.write(rf"\begin{{tabular}}{{{_calign}}}")
+      f.write('\n')
+      f.write(f'\hline')
+      f.write('\n')
+      f.write("\\\\ \n".join(header))
+      f.write('\\\\ \n')
+      f.write(f'\hline')
+      f.write(f'\hline')
+      f.write('\n')
+      f.write("\\\\ \n".join(table))
+      f.write('\\\\ \n')
+      f.write(f'\hline')
+      f.write('\n')
+      f.write(r"\end{tabular}")
+    f.close()
+# }}}
+
+
+# vim: fdm=marker

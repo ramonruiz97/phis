@@ -1,0 +1,119 @@
+# Run2 physics_params ----------------------------------------------------------
+#     This rule runs the iterative procedure for FullRun2 years using RD.
+
+
+
+# WARNING: Change angular acceptance input and use Bs2JpsiPhi instead.
+#          We need to create a rule to merge MCs and get the Bs one
+rule toys_generate_data:
+  input:
+    samples = lambda wcs: tuples(wcs, version=config['version'], year=f'{wcs.year}', mode='Bs2JpsiPhi'),
+    # Angular acceptance
+    angacc_biased = lambda wcs: f"output/params/angular_acceptance/{wcs.year}/Bs2JpsiPhi/{config['version']}_run2_simul3_biased.json",
+    angacc_unbiased = lambda wcs: f"output/params/angular_acceptance/{wcs.year}/Bs2JpsiPhi/{config['version']}_run2_simul3_unbiased.json",
+    # Time acceptance
+    timeacc_biased = lambda wcs: f"output/params/time_acceptance/{wcs.year}/Bd2JpsiKstar/{config['version']}_{config['timeacc']}_biased.json",
+    timeacc_unbiased = lambda wcs: f"output/params/time_acceptance/{wcs.year}/Bd2JpsiKstar/{config['version']}_{config['timeacc']}_unbiased.json",
+    # CSP
+    csp_factors = lambda wcs: f"output/params/csp_factors/{wcs.year}/Bs2JpsiPhi/{config['version'].split('@')[0]}.json",
+    # Time resolution
+    time_resolution = lambda wcs: f"output/params/time_resolution/{wcs.year}/Bs2JpsiPhi/{config['version'].split('@')[0]}.json",
+    # Flavor tagging
+    flavor = lambda wcs: f"output/params/flavor_tagging/{wcs.year}/Bs2JpsiPhi/{config['version'].split('@')[0]}.json",
+    # Previously fitted parameters
+    params = lambda wcs: f"output/params/physics_params/{config['fit'] if config['fit']!='yearly' else f'{wcs.year}'}/Bs2JpsiPhi/{config['version']}_{config['fit']}_{config['angacc']}_{config['timeacc']}.json",
+  output:
+    SAMPLES_PATH+"{year}/TOY_Bs2JpsiPhi/{dateflag}.root",
+  log:
+    "output/log/toys_generate_data/{year}/TOY_Bs2JpsiPhi/{dateflag}.log"
+  run:
+    shell(f"""(time\
+    python analysis/toys/generator.py\
+           --sample                  {input.samples}\
+           --angacc-biased           {input.angacc_biased}\
+           --angacc-unbiased         {input.angacc_unbiased}\
+           --randomize-angacc        {config['randomize_angacc']}\
+           --timeacc-biased          {input.timeacc_biased}\
+           --timeacc-unbiased        {input.timeacc_unbiased}\
+           --randomize-timeacc       {config['randomize_timeacc']}\
+           --csp-factors             {input.csp_factors}\
+           --time-resolution         {input.time_resolution}\
+           --flavor-tagging          {input.flavor}\
+           --fitted-params           {input.params}\
+           --output                  {output}\
+           --year                    {wildcards.year}\
+           --version                 {config['version']}\
+    ) &> {log}""")
+    send_mail(f"Toy Generation RD :: {wildcards} {config}", f"{log}")
+
+
+
+rule toys_fit:
+  input:
+    samples = lambda wcs: expand(SAMPLES_PATH+'{year}/TOY_Bs2JpsiPhi/{dateflag}.root',
+                                 year=YEARS[f'{wcs.year}'], dateflag=f'{wcs.dateflag}'),
+    angacc_biased = lambda wcs: expand("output/params/angular_acceptance/{year}/Bs2JpsiPhi/{version}_{angacc}_{timeacc}_biased.json",
+                                       year=YEARS[f'{wcs.year}'], version=config['version'], angacc=f'{wcs.angacc}', timeacc=f'{wcs.timeacc}'),
+    angacc_unbiased = lambda wcs: expand("output/params/angular_acceptance/{year}/Bs2JpsiPhi/{version}_{angacc}_{timeacc}_unbiased.json",
+                                         year=YEARS[f'{wcs.year}'], version=config['version'], angacc=f'{wcs.angacc}', timeacc=f'{wcs.timeacc}'),
+    timeacc_biased = lambda wcs: expand("output/params/time_acceptance/{year}/Bd2JpsiKstar/{version}_{timeacc}_biased.json",
+                                        year=YEARS[f'{wcs.year}'], version=config['version'], timeacc=f'{wcs.timeacc}'),
+    timeacc_unbiased = lambda wcs: expand("output/params/time_acceptance/{year}/Bd2JpsiKstar/{version}_{timeacc}_unbiased.json",
+                                          year=YEARS[f'{wcs.year}'], version=config['version'], timeacc=f'{wcs.timeacc}'),
+    csp_factors = lambda wcs: expand("output/params/csp_factors/{year}/Bs2JpsiPhi/{version}.json",
+                                     year=YEARS[f'{wcs.year}'], version=config['version'].split('@')[0]),
+    flavor = lambda wcs: expand("output/params/flavor_tagging/{year}/Bs2JpsiPhi/{version}.json",
+                                year=YEARS[f'{wcs.year}'], version=config['version'].split('@')[0]),
+    time_resolution = lambda wcs: expand("output/params/time_resolution/{year}/Bs2JpsiPhi/{version}.json",
+                                         year=YEARS[f'{wcs.year}'], version=config['version'].split('@')[0]),
+  output:
+    params = 'output/params/physics_params/{year}/TOY_Bs2JpsiPhi/{dateflag}_{fit}_{angacc}_{timeacc}.json',
+    tables = 'output/tables/physics_params/{year}/TOY_Bs2JpsiPhi/{dateflag}_{fit}_{angacc}_{timeacc}.tex',
+  log:
+    'output/log/physics_params_toy/{year}/TOY_Bs2JpsiPhi/{dateflag}_{fit}_{angacc}_{timeacc}.log'
+  run:
+    shell(f"""(time\
+    python analysis/angular_fit/fit_data.py\
+           --samples                 {",".join(input.samples)}\
+           --angacc-biased           {",".join(input.angacc_biased)}\
+           --angacc-unbiased         {",".join(input.angacc_unbiased)}\
+           --timeacc-biased          {",".join(input.timeacc_biased)}\
+           --timeacc-unbiased        {",".join(input.timeacc_unbiased)}\
+           --csp                     {",".join(input.csp_factors)}\
+           --time-resolution         {",".join(input.time_resolution)}\
+           --flavor-tagging          {",".join(input.flavor)}\
+           --params                  {output.params}\
+           --tables                  {output.tables}\
+           --year                    {",".join(YEARS[f'{wildcards.year}'])}\
+           --flag                    {wildcards.year}_{wildcards.angacc}_{wildcards.timeacc}\
+           --version                 {config['version']}\
+           --blind                   {settings.general['blind']}\
+    ) &> {log}""")
+    send_mail(f"Physics Parameters TOY Run2a", f"{log}")
+
+
+
+rule toys_compute_pulls:
+  wildcard_constraints:
+    dateflag = '(\d{8})(a|b|c|d|e|f|g|h|i|j)?'
+  input:
+    data_params = expand('output/params/physics_params/{{year}}/Bs2JpsiPhi/{version}_{{fitconf}}.json',
+                         version=config['version']),
+    toy_params = expand('output/params/physics_params/{{year}}/TOY_Bs2JpsiPhi/{{dateflag}}{i}_{{fitconf}}.json',
+                    i=list(range(1,settings.general['ntoys']+1)))
+  output:
+    #params = 'output/params/systematics/run2a/TOY_Bs2JpsiPhi/{version}w{toyconf}gen{dateflag}_run2a_{angacc}_{timeacc}.json',
+    tables = 'output/tables/systematics/fit_bias/{year}/TOY_Bs2JpsiPhi/{dateflag}_{fitconf}.tex',
+    figures = directory('output/figures/systematics/fit_bias/{year}/TOY_Bs2JpsiPhi/{dateflag}_{fitconf}/')
+  log:
+    'output/log/systematics/fit_bias/{year}/TOY_Bs2JpsiPhi/{dateflag}_{fitconf}.log'
+  run:
+    shell(f"""(time\
+    python analysis/toys/mans.py\
+           --data-parameters      {",".join(input.data_params)}\
+           --toy-parameters       output/params/physics_params/{wildcards.year}/TOY_Bs2JpsiPhi/{wildcards.dateflag}ntoy_{wildcards.fitconf}.json\
+           --figures              {output.figures}\
+           --ntoys                {settings.general['ntoys']}
+    ) #&> {log}""")
+    shell(f"""touch {output.tables}""")
+    #send_mail(f"Physics Parameters TOY Run2a", f"{log}")

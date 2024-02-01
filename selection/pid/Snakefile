@@ -1,0 +1,107 @@
+# Rules for PID correction
+# These sets of rules are very slow to run, so we should try to avoid
+# reruning them
+#
+# TODO: create a set of rules to uplotad PID
+# TODO: create some if-else structure to swicht runin/donwloading the PID
+#       tuples -- should be quite easy
+
+
+# correct the PID {{{
+
+def input_for_correct_pid(wildcards):
+    if "MC_Bs2DsPi" == f"{wildcards.mode}":
+        # return SAMPLES + '/{year}/{mode}/{version}_{strip_sim}_pidgen{polarity}.root',
+        return SAMPLES + '/{year}/{mode}/{version}_{strip_sim}_prepared{polarity}.root',
+    else:
+        return SAMPLES + '/{year}/{mode}/{version}_{strip_sim}_pidgen{polarity}.root',
+
+
+rule preselection_correct_pid:
+    """
+    Generic rule.
+    Adds corrected PID variables to the given MC tuple
+    """
+    threads: 2
+    resources:
+        mem_mb = 12000
+    wildcard_constraints:
+        strip_sim = "str.*",
+        polarity = "(Up|Down)",
+        mode  = "(MC)((?!.*?(_fromLb)).*)"
+    input:
+        tracks = 'selection/pid/pidcorr.yaml',
+        file = input_for_correct_pid,
+        # file = lambda wildcards: expand(rules.correct_muonpid.output.file if wildcards.mode != 'MC_Bs2DsPi' else rules.prepare_mc.output,
+        #                                 version='{version}',
+        #                                 mode='{mode}',
+        #                                 strip_sim='{strip_sim}',
+        #                                 year='{year}',
+        #                                 polarity='{polarity}'),
+    params:
+        script = 'selection/tools/PIDCorr.py',
+    output:
+        file = temporal(SAMPLES + '/{year}/{mode}/{version}_{strip_sim}_pidcorrected{polarity}.root'),
+        tmp1 = temporal(SAMPLES + '/{year}/{mode}/{version}_{strip_sim}_pidcorr{polarity}_tmp1.root'),
+        tmp2 = temporal(SAMPLES + '/{year}/{mode}/{version}_{strip_sim}_pidcorr{polarity}_tmp2.root'),
+    log:
+        'output/log/selection_pid_correction/{year}/{mode}/{version}_{strip_sim}_pidcorrected{polarity}.log',
+    shell:
+        '(' + selconfig['runUrania'] + ' ' +
+        'python {params.script} --input-file {input.file} \
+                               --input-tree-name DecayTree \
+                               --output-file {output.file} \
+                               --data-set Mag{wildcards.polarity}_{wildcards.year} \
+                               --mode {wildcards.mode} \
+                               --tracks-file {input.tracks} \
+                               --tmp1 {output.tmp1} \
+                               --tmp2 {output.tmp2}) &> {log}'
+
+# }}}
+
+
+# run gen PID {{{
+
+rule preselection_correct_muonpid:
+    """
+    Generic rule.
+    Adds corrected muon PID variables to the given MC tuple
+    """
+    threads: 2
+    resources:
+        mem_mb = 12000
+    wildcard_constraints:
+        strip_sim = "str.*",
+        polarity = "(Up|Down)",
+        mode  = "(MC)((?!.*?(_fromLb)).*)"
+    input:
+        tracks = 'selection/pid/pidgen.yaml',
+        file = expand(rules.preselection_add_genlvl_info.output.file,
+                      mode='{mode}',
+                      version='{version}',
+                      strip_sim='{strip_sim}',
+                      year='{year}',
+                      polarity='{polarity}'),
+    params:
+        script = 'selection/tools/PIDGen.py',
+    output:
+        file = temporal(SAMPLES + '/{year}/{mode}/{version}_{strip_sim}_pidgen{polarity}.root'),
+        tmp1 = temporal(SAMPLES + '/{year}/{mode}/{version}_{strip_sim}_pidgen{polarity}_tmp1.root'),
+        tmp2 = temporal(SAMPLES + '/{year}/{mode}/{version}_{strip_sim}_pidgen{polarity}_tmp2.root'),
+    log:
+        'output/log/selection_pid_correction/{year}/{mode}/{version}_{strip_sim}_pidgen{polarity}.log',
+    shell:
+        '(' + selconfig['runUrania'] + ' ' +
+        'python {params.script} --input-file {input.file} \
+                              --input-tree-name DecayTree \
+                              --output-file {output.file} \
+                              --data-set Mag{wildcards.polarity}_{wildcards.year}\
+                              --mode {wildcards.mode} \
+                              --tracks-file {input.tracks} \
+                              --tmp1 {output.tmp1} \
+                              --tmp2 {output.tmp2} ) &> {log}'
+
+# }}}
+
+
+# vim: fdm=marker
